@@ -940,6 +940,12 @@
           <div class="chips">${s.members.map(m => `<button class="chip" data-me="${esc(m.id)}">${esc(m.emoji)} ${esc(m.name)}</button>`).join("")}</div></div>`;
       }
 
+      if (!room && cachedRooms().length) {
+        const r = cachedRooms()[0];
+        html += `<div class="banner"><p>🔗 공유 가계부 연결이 끊겨 있어요. 공유한 뒤 적은 기록(${r.count}건)은 공유 가계부에 그대로 있어요.</p>
+          <button class="btn small primary" data-rejoin="${r.code}">다시 연결</button></div>`;
+      }
+
       const fresh = unseenList();
       if (fresh.length) {
         const by = {};
@@ -2243,6 +2249,24 @@
       connectRoom(code, seed);
     }
 
+    // 이 휴대폰에 캐시가 남아 있는 공유 가계부들 (공유를 끊은 뒤 다시 연결할 때)
+    function cachedRooms() {
+      const out = [];
+      try {
+        for (const k of Object.keys(localStorage)) {
+          const m = k.match(/^familyBudget\.v1:room:([a-z0-9]{20})$/);
+          if (!m || m[1] === room) continue;
+          const d = JSON.parse(localStorage.getItem(k));
+          if (!isValidState(d)) continue;
+          const txs = Object.values(d.months).flatMap(x => Object.values(x));
+          if (!txs.length) continue;
+          const last = txs.map(t => t.date).sort().pop();
+          out.push({ code: m[1], title: (d.settings && d.settings.title) || DEFAULT_TITLE, count: txs.length, last });
+        }
+      } catch (e) { /* 저장소를 못 쓰면 없음 */ }
+      return out.sort((a, b) => b.last.localeCompare(a.last));
+    }
+
     function leaveRoom() {
       disconnectRoom();
       room = null;
@@ -2310,6 +2334,18 @@
       }
 
       if (!room) {
+        const olds = cachedRooms();
+        if (olds.length) {
+          add('<div class="sub-h" style="margin-top:0">📂 이 휴대폰에서 쓰던 공유 가계부</div>');
+          for (const r of olds) {
+            const row = document.createElement("div");
+            row.className = "set-row";
+            row.innerHTML = `<span style="color:var(--text)">${esc(r.title)} <small style="color:var(--sub)">기록 ${r.count}건 · 마지막 ${md(r.last)}</small></span>`;
+            row.append(button("다시 연결", "primary small", () => enterRoom(r.code, false)));
+            box.append(row);
+          }
+          add('<p class="note" style="margin-top:8px">공유를 끊으면 공유 전의 개인 가계부가 보여요. 공유 가계부 기록은 그대로 남아 있으니 “다시 연결”을 누르세요.</p>');
+        }
         add('<p class="note">공유 가계부를 만들고 링크를 보내면, 아내와 같은 가계부에 각자 휴대폰으로 적고 바로바로 같이 볼 수 있어요. 지금까지의 기록은 공유 가계부로 옮겨져요.</p>');
         const make = button("🔗 함께 쓰는 가계부 만들기", "primary", async () => {
           const config = await loadFirebaseConfig();
@@ -2342,7 +2378,7 @@
       actions.append(
         button("📤 링크 보내기", "primary", sendShareLink),
         button("공유 끊기", "", () => {
-          if (confirm("이 기기에서 공유 가계부 연결을 끊을까요? (공유 가계부 내용은 그대로 남아요)")) leaveRoom();
+          if (confirm("이 휴대폰에서 공유 가계부 연결을 끊을까요?\n\n끊으면 공유하기 전의 개인 가계부가 보여요. 공유 가계부 기록은 서버에 그대로 남아 있고, 설정 → 함께 쓰기의 “다시 연결”로 언제든 돌아올 수 있어요.")) leaveRoom();
         })
       );
       box.append(actions);
@@ -2370,6 +2406,7 @@
       if (d.month) { cur = d.month; if (d.smonth) statsMode = "month"; render(); return; }
       if (d.smode) { statsMode = d.smode; render(); return; }
       if (d.year) { cur = `${d.year}-${cur.slice(5)}`; render(); return; }
+      if (d.rejoin) { enterRoom(d.rejoin, false); toast("공유 가계부에 다시 연결했어요"); return; }
       if (d.dismiss) {
         const dis = dismissed();
         dis[d.dismiss] = 1;
