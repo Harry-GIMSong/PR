@@ -2191,12 +2191,33 @@
         remote.settingsRef = fs.doc(remote.db, "budgets", code);
         remote.monthsCol = fs.collection(remote.settingsRef, "months");
         if (seed) await pushAll();
+        else {
+          // 서버에 아직 없는 공유 가계부(예: Firebase 규칙을 고치기 전에 만든 것)면 이 휴대폰 기록을 올립니다
+          try {
+            const snap = await fs.getDocFromServer(remote.settingsRef);
+            if (!snap.exists() && allTx().length) await pushAll();
+          } catch (e) {
+            if (e && e.code === "permission-denied") return onRemoteError(e);
+            // 오프라인이면 휴대폰에 저장된 내용으로 계속합니다
+          }
+        }
         remote.ready = true;
+        // 서버에 설정 문서가 있는 걸 확인하기 전에는 기록을 덮어쓰지 않습니다 (휴대폰 기록이 빈 내용으로 지워지지 않게)
+        let settingsOk = false;
+        let latestMonths = null;
+        const applyMonths = () => {
+          if (!settingsOk || !latestMonths) return;
+          state.months = latestMonths;
+          save();
+          render();
+        };
         remote.unsubs.push(fs.onSnapshot(remote.settingsRef, snap => {
           if (!snap.exists()) {
+            settingsOk = false;
             setShareStatus("missing");
             return;
           }
+          settingsOk = true;
           const raw = snap.data();
           state.settings = normSettings(raw);
           if ((Number(raw.catsVersion) || 1) < CATS_VERSION) {
@@ -2205,6 +2226,7 @@
           save();
           render();
           setShareStatus("live");
+          applyMonths();
         }, onRemoteError));
         remote.unsubs.push(fs.onSnapshot(remote.monthsCol, qs => {
           const months = {};
@@ -2212,9 +2234,8 @@
             const tx = d.data().tx || {};
             if (Object.keys(tx).length) months[d.id] = tx;
           });
-          state.months = months;
-          save();
-          render();
+          latestMonths = months;
+          applyMonths();
         }, onRemoteError));
       } catch (e) {
         onRemoteError(e);
