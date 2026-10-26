@@ -175,6 +175,21 @@ nav .dot{width:7px;height:7px;border-radius:50%;background:var(--bad);display:in
 @keyframes fade{from{opacity:0}}
 @keyframes pop{from{transform:scale(.9);opacity:0}}
 
+/* 파티 */
+.mate{display:grid;grid-template-columns:46px 1fr auto;gap:10px;align-items:center;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);margin-bottom:8px;width:100%;text-align:left}
+.mate.me{border-color:color-mix(in srgb,var(--acc) 50%,var(--line))}
+.mate .rank{width:46px;height:46px;font-size:22px}
+.mate .done{color:var(--ok);font-weight:800}
+.mini{display:grid;grid-template-columns:repeat(22,1fr);gap:2px;margin-top:6px}
+.mini i{aspect-ratio:1;border-radius:2px;background:#0b1628;border:1px solid var(--line)}
+.mini i.d{background:var(--acc);border-color:var(--acc)} .mini i.f{background:var(--gold);border-color:var(--gold)}
+.mini i.r{background:var(--rest);border-color:var(--rest)} .mini i.s{border:1px dashed var(--rest)} .mini i.m{background:color-mix(in srgb,var(--bad) 40%,#0b1628)}
+.cheers{display:flex;gap:6px;flex-wrap:wrap}
+.cheers button{border:1px solid var(--line);background:#0b1628;border-radius:999px;padding:6px 12px}
+.code{font-family:ui-monospace,Menlo,monospace;letter-spacing:.05em;word-break:break-all;color:var(--gold)}
+.sdot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--sub);margin-right:6px}
+.sdot.live{background:var(--ok);box-shadow:0 0 6px var(--ok)} .sdot.bad{background:var(--bad)} .sdot.wait{background:var(--gold)}
+
 /* 시작 화면 */
 .gcards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0}
 .gcard{border:1px solid var(--line);border-radius:8px;padding:12px;background:var(--panel2);text-align:left}
@@ -291,7 +306,12 @@ function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e
 function fresh(name, gender, start) {
   return { v: 1, name, gender, start, cycle: 1, days: {}, alloc: { str: 0, vit: 0, agi: 0, int: 0, per: 0 },
     bank: { xp: 0, st: { str: 0, vit: 0, agi: 0, int: 0, per: 0 } }, ach: {}, title: null, theme: VER[gender].theme,
-    shields: {}, evals: {}, custom: [], seen: {} };
+    shields: {}, evals: {}, custom: [], seen: {}, pid: newId(12) };
+}
+
+function newId(n) {
+  const abc = "abcdefghijkmnpqrstuvwxyz23456789";
+  return Array.from(crypto.getRandomValues(new Uint8Array(n)), x => abc[x % abc.length]).join("");
 }
 
 // ===== 날짜 =====
@@ -392,6 +412,7 @@ function derive() {
   });
   return { T, last, D, snaps, xp: Math.floor(xp), level: L, rem, nextNeed: need(L), stats: total, base: st, free: (L - 1) * 3 - alloc,
     tot, pr, run, best, doneCount, over, penDone, deloads, bosses, shields: earned - used, earned, used,
+    mates: mates(D),
     sleepAvg: sleepN ? sleepSum / sleepN : 0, bestSleepRun, ev, evN, power: Math.round(Object.values(total).reduce((a, b) => a + b, 0) * (1 + L / 10)) };
 }
 
@@ -450,10 +471,18 @@ function achList() {
   A("true", "hidden", "☠️", v.trueName, "???", C => { const x = C.D.find(x => !x.rest && Object.entries(v.trueQ).every(([k, n]) => (+(x.rec.q || {})[k] || 0) >= n)); return x && `Day ${x.d} 달성`; }, { title: "진짜 플레이어", hint: "원작의 그 퀘스트" });
   A("alloc", "hidden", "🧩", "성장 설계자", "???", () => Object.values(S.alloc).some(n => n > 0) && "능력치 포인트 첫 분배", { hint: "남은 포인트를 써 보기" });
   A("custom", "hidden", "📝", "나만의 퀘스트", "???", () => S.custom.length > 0 && `'${S.custom[0].name}' 생성`, { hint: "해금된 칸에 퀘스트 추가" });
+
+  // 파티: 함께 하는 사람이 있을 때만 열린다
+  A("party1", "party", "🤝", "파티 결성", "다른 플레이어와 파티 맺기", C => C.mates.length > 0 && `'${C.mates.map(m => m.name).join("', '")}'님과 파티 결성`);
+  A("tg1", "party", "👫", "함께 클리어", "같은 날 파티원과 둘 다 클리어", C => { const m = C.mates.find(m => m.together.length); return m && `${m.together[0]} ${m.name}님과 함께 클리어`; });
+  A("tg7", "party", "💞", "함께한 일주일", "파티원과 같은 날 클리어 7번", C => { const m = C.mates.find(m => m.together.length >= 7); return m && `${m.name}님과 함께 클리어 ${m.together.length}일 (7번째 ${m.together[6]})`; }, { title: "최고의 파티" });
+  A("tg30", "party", "💍", "운명 공동체", "파티원과 같은 날 클리어 30번", C => { const m = C.mates.find(m => m.together.length >= 30); return m && `${m.name}님과 함께 클리어 ${m.together.length}일`; }, { title: "운명 공동체" });
+  A("cheer1", "party", "📣", "응원을 받은 자", "파티원에게 응원 받기", () => (S.cheerGot || 0) > 0 && `응원 ${S.cheerGot}번 받음`);
+  A("cheer10", "party", "🎺", "응원단장", "파티원에게 응원 10번 보내기", () => (S.cheerSent || 0) >= 10 && `응원 ${S.cheerSent}번 보냄`);
   return L;
 }
 const ACH = () => achList();
-const CATS = { habit: "꾸준함", growth: "성장의 증거", rest: "회복", total: "누적", rank: "랭크·보스", hidden: "숨겨진 업적" };
+const CATS = { habit: "꾸준함", growth: "성장의 증거", rest: "회복", total: "누적", rank: "랭크·보스", party: "파티", hidden: "숨겨진 업적" };
 
 // ===== 상태 =====
 let C = null, tab = "quest", viewDay = null, achCat = "all", mapSel = null, queue = [];
@@ -480,6 +509,7 @@ function refresh(notify = true) {
     }
   }
   save();
+  publishSoon();
   pump();
 }
 function pump() {
@@ -504,9 +534,9 @@ function render() {
   const app = document.getElementById("app"), nav = document.getElementById("nav");
   if (!S) { nav.hidden = true; app.innerHTML = onboarding(); return; }
   nav.hidden = false;
-  const tabs = [["quest", "⚔️", "퀘스트"], ["status", "📊", "상태창"], ["log", "🗺️", "기록"], ["ach", "🏆", "업적"], ["unlock", "🔓", "해금"]];
-  nav.innerHTML = tabs.map(([id, ic, nm]) => `<button class="${tab === id ? "on" : ""}" onclick="go('${id}')"><span>${ic}</span>${nm}${id === "status" && C.free > 0 ? '<i class="dot"></i>' : ""}</button>`).join("");
-  app.innerHTML = header() + ({ quest: questView, status: statusView, log: logView, ach: achView, unlock: unlockView })[tab]();
+  const tabs = [["quest", "⚔️", "퀘스트"], ["status", "📊", "상태창"], ["log", "🗺️", "기록"], ["ach", "🏆", "업적"], ["unlock", "🔓", "해금"], ["party", "👥", "파티"]];
+  nav.innerHTML = tabs.map(([id, ic, nm]) => `<button class="${tab === id ? "on" : ""}" onclick="go('${id}')"><span>${ic}</span>${nm}${(id === "status" && C.free > 0) || (id === "party" && partyAlert()) ? '<i class="dot"></i>' : ""}</button>`).join("");
+  app.innerHTML = header() + ({ quest: questView, status: statusView, log: logView, ach: achView, unlock: unlockView, party: partyView })[tab]();
 }
 function go(t) { tab = t; render(); scrollTo(0, 0); }
 
@@ -530,6 +560,7 @@ function onboarding() {
     <p style="text-align:center;font-weight:700;font-size:17px;margin:0">[플레이어가 될 자격을 얻었습니다.]</p>
     <p class="muted small" style="text-align:center">66일 동안 E랭크부터 S랭크까지. 처음엔 쉽게, 날마다 조금씩 강해집니다.<br>
     일주일에 한 번은 <b style="color:var(--rest)">회복의 날</b>, 22일마다 <b style="color:var(--gold)">측정의 날</b>이 찾아옵니다.</p>
+    ${invite ? `<div class="banner" style="margin-top:10px">👥 <b>파티 초대를 받았습니다.</b> 플레이어 등록을 마치면 파티에 자동으로 들어갑니다.</div>` : ""}
     <label class="f">플레이어 이름</label><input id="ob-name" maxlength="16" placeholder="성진우" value="${esc(window._n || "")}">
     <label class="f">버전 선택</label>
     <div class="gcards">${["m", "f"].map(k => `<button class="gcard ${g === k ? "on" : ""}" onclick="window._n=document.getElementById('ob-name').value;window._g='${k}';render()">
@@ -546,6 +577,7 @@ function accept() {
   refresh(false);
   queue.push({ big: "🗝️", title: "플레이어 등록 완료", body: `${S.name}님, 시스템에 오신 것을 환영합니다.\n일일 퀘스트를 완료하지 않으면 패널티가 주어집니다.` });
   render(); pump();
+  if (invite) { joinParty(invite); invite = null; }
 }
 
 // --- 퀘스트 ---
@@ -839,17 +871,224 @@ document.getElementById("importFile").addEventListener("change", async e => {
     const s = JSON.parse(await f.text());
     if (s.v !== 1 || !s.start || !VER[s.gender]) throw 0;
     if (!confirm("지금 기록을 백업 파일 내용으로 바꿀까요?")) return;
-    S = s; C = null; refresh(false); render();
+    const keep = S && { pid: S.pid, party: S.party };
+    S = s; if (keep) Object.assign(S, keep); C = null; refresh(false); render();
   } catch (err) { alert("백업 파일을 읽지 못했습니다."); }
 });
 function resetAll() {
   if (!confirm("모든 기록·업적·해금이 사라집니다. 정말 처음부터 할까요?")) return;
+  if (S.party) leaveParty(true);
   try { localStorage.removeItem(KEY); } catch (e) { /* 무시 */ }
   S = null; C = null; render();
 }
 
+
+// ===== 파티: Firebase Firestore로 파티원끼리 진행 상황을 보여 준다 =====
+// levelups/{파티 코드}/players/{플레이어 id} 문서에 각자 요약(레벨·오늘 퀘스트·지도·능력치)을 올리고,
+// 기록 원본은 여전히 각자 휴대폰에만 있다. 응원은 상대 문서의 cheers.{내 id} 칸에만 쓴다.
+const FIREBASE_SDK = "https://www.gstatic.com/firebasejs/10.12.2";
+const party = { fs: null, col: null, unsub: null, status: "off", members: {}, sent: "", timer: null };
+let invite = null, partySel = null;
+
+function mates(D) {
+  const mine = new Set(D.filter(x => x.done).map(x => x.date));
+  return Object.values(party.members).filter(m => m.id !== S.pid && m.name)
+    .map(m => ({ name: m.name, together: (m.cleared || []).filter(d => mine.has(d)).sort() }));
+}
+function partyLink() { return `${location.origin}${location.pathname}?party=${S.party}`; }
+function setPartyStatus(st) { party.status = st; if (tab === "party") render(); }
+
+async function connectParty() {
+  if (!S || !S.party) return;
+  let config = null;
+  try { config = (await import("./firebase-config.js")).default; } catch (e) { /* 설정 파일이 없으면 공유 없이 */ }
+  if (!config) return setPartyStatus("nocfg");
+  setPartyStatus("wait");
+  try {
+    const [{ initializeApp, getApps }, fs] = await Promise.all([import(`${FIREBASE_SDK}/firebase-app.js`), import(`${FIREBASE_SDK}/firebase-firestore.js`)]);
+    const app = getApps()[0] || initializeApp(config);
+    party.fs = fs;
+    party.col = fs.collection(fs.getFirestore(app), "levelups", S.party, "players");
+    if (party.unsub) party.unsub();
+    party.unsub = fs.onSnapshot(party.col, qs => {
+      const members = {};
+      qs.forEach(d => { members[d.id] = d.data(); });
+      party.members = members;
+      onPartyUpdate();
+      setPartyStatus("live");
+    }, onPartyError);
+    party.sent = "";
+    publishSoon(0);
+  } catch (e) { onPartyError(e); }
+}
+function onPartyError(e) {
+  console.error(e);
+  setPartyStatus(e && e.code === "permission-denied" ? "denied" : "error");
+}
+function onPartyUpdate() {
+  // 받은 응원, 파티원의 오늘 클리어를 알림으로
+  const me = party.members[S.pid] || {};
+  S.seenCheer = S.seenCheer || {}; S.seenClear = S.seenClear || {};
+  for (const [from, c] of Object.entries(me.cheers || {})) {
+    if (!c || !(c.at > (S.seenCheer[from] || 0))) continue;
+    S.seenCheer[from] = c.at; S.cheerGot = (S.cheerGot || 0) + 1;
+    queue.push({ big: c.e || "📣", title: "파티 알림", body: `${c.name}님이 응원을 보냈습니다.\n"${c.e} ${c.msg || "힘내!"}"` });
+  }
+  for (const m of Object.values(party.members)) {
+    if (m.id === S.pid || !m.today || !m.today.done || m.today.date !== todayStr()) continue;
+    if (S.seenClear[m.id] === m.today.date) continue;
+    S.seenClear[m.id] = m.today.date;
+    queue.push({ big: "⚔️", title: "파티 알림", body: `${m.name}님이 오늘(Day ${m.day}) ${m.today.rest ? "회복 퀘스트" : "일일 퀘스트"}를 클리어했습니다.${C.D[Math.min(C.T, 66) - 1]?.done ? "\n오늘은 둘 다 클리어!" : "\n나도 질 수 없다."}` });
+  }
+  refresh();
+  // 입력 중일 땐 화면을 다시 그리지 않는다 (글자가 지워지지 않게)
+  const el = document.activeElement;
+  if (!el || !/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) render();
+}
+function snapshot() {
+  const T = Math.min(C.T, 66), x = C.D[T - 1], list = ACH();
+  const th = THEMES.find(t => t.id === S.theme) || THEMES[0];
+  return {
+    id: S.pid, name: S.name, gender: S.gender, title: S.title || "각성자", acc: th.acc,
+    level: C.level, rem: C.rem, need: C.nextNeed, power: C.power, rank: RANKS[rankIdx(T)].id, day: C.T, cycle: S.cycle || 1,
+    run: C.run, best: C.best.len, done: C.doneCount, stats: C.stats, sleep: Math.round(C.sleepAvg * 10) / 10,
+    shadows: RANKS.filter(r => S.ach["boss_" + r.id]).length,
+    today: x ? { date: x.date, done: x.done, full: x.full, rest: x.rest, pen: x.pen, fat: x.rec.fat || 0, dl: !!x.rec.dl, note: x.rec.note || "",
+      items: x.main.concat(x.sub).map(m => ({ n: m.q.name, i: m.q.icon, v: m.v, t: m.t, u: m.q.unit })) } : null,
+    map: Array.from({ length: 66 }, (_, i) => { const y = C.D[i]; return !y ? "." : y.full ? "f" : y.done ? (y.rest ? "r" : "d") : y.shield ? "s" : i + 1 < C.T ? "m" : "."; }).join(""),
+    cleared: C.D.filter(y => y.done).map(y => y.date),
+    ach: Object.keys(S.ach).length,
+    recent: Object.entries(S.ach).sort((a, b) => b[1].at - a[1].at).slice(0, 6).map(([id, v]) => { const a = list.find(a => a.id === id); return { n: a ? a.name : id, i: a ? a.icon : "🏆", ev: v.ev, at: v.at }; }),
+    growth: C.ev.filter(e => e.rows.length > 1).map(e => ({ n: e.e.name, p: Math.round(e.pct) }))
+  };
+}
+function publishSoon(delay = 1200) {
+  if (!S || !S.party || !party.col) return;
+  clearTimeout(party.timer);
+  party.timer = setTimeout(() => {
+    const snap = snapshot(), key = JSON.stringify(snap);
+    if (key === party.sent) return;
+    party.sent = key;
+    party.fs.setDoc(party.fs.doc(party.col, S.pid), { ...snap, at: Date.now() }, { merge: true }).catch(onPartyError);
+  }, delay);
+}
+function createParty() { joinParty(newId(20)); }
+function joinParty(code) {
+  code = (String(code).match(/party=([a-z0-9]+)/) || [null, String(code).trim()])[1];
+  if (!/^[a-z0-9]{20}$/.test(code)) { alert("파티 코드가 올바르지 않아요. 받은 링크나 20자리 코드를 그대로 넣어 주세요."); return; }
+  if (S.party && S.party !== code) leaveParty(true);
+  S.pid = S.pid || newId(12);
+  S.party = code; party.members = {}; save();
+  connectParty();
+  tab = "party"; render();
+}
+function leaveParty(silent) {
+  if (!silent && !confirm("파티에서 나갈까요? 파티원 목록에서 내 정보가 지워집니다. (내 기록은 그대로)")) return;
+  if (party.unsub) party.unsub();
+  if (party.col) party.fs.deleteDoc(party.fs.doc(party.col, S.pid)).catch(() => { /* 오프라인이면 남을 수 있음 */ });
+  Object.assign(party, { col: null, unsub: null, members: {}, status: "off", sent: "" });
+  S.party = null; partySel = null; save(); render();
+}
+async function shareParty() {
+  const url = partyLink(), text = `${S.name}님의 66일 레벨업 파티 초대 ⚔️ 같이 강해지자!`;
+  try { if (navigator.share) { await navigator.share({ title: "66일 레벨업 파티", text, url }); return; } } catch (e) { return; /* 공유 창을 닫음 */ }
+  try { await navigator.clipboard.writeText(url); alert("초대 링크를 복사했어요. 카톡에 붙여 넣어 보내세요."); }
+  catch (e) { prompt("이 링크를 복사해서 보내세요", url); }
+}
+function cheer(id, e, msg) {
+  if (!party.col) return;
+  party.fs.updateDoc(party.fs.doc(party.col, id), { [`cheers.${S.pid}`]: { name: S.name, e, msg, at: Date.now() } })
+    .then(() => { S.cheerSent = (S.cheerSent || 0) + 1; refresh(); queue.push({ big: e, title: "응원 전송", body: `${party.members[id]?.name || "파티원"}님에게 "${msg}"를 보냈습니다.` }); pump(); })
+    .catch(onPartyError);
+}
+function partyAlert() {
+  return Object.values(party.members).some(m => m.id !== S.pid && m.today && m.today.date === todayStr() && m.today.done) && !(C.D[Math.min(C.T, 66) - 1] || {}).done;
+}
+const ago = t => { const s = (Date.now() - t) / 1000; return s < 60 ? "방금" : s < 3600 ? `${Math.floor(s / 60)}분 전` : s < 86400 ? `${Math.floor(s / 3600)}시간 전` : `${Math.floor(s / 86400)}일 전`; };
+
+// --- 파티 화면 ---
+function partyView() {
+  if (!S.party) return `<div class="win"><div class="win-h"><span>파티</span></div>
+    <p style="margin-top:0">아내(남편)·친구와 파티를 맺으면 서로의 <b>레벨, 오늘 퀘스트 진행, 66일 지도, 능력치, 최근 업적</b>이 실시간으로 보이고 응원을 보낼 수 있어요.</p>
+    <p class="muted small">각자 자기 버전(남자/여자)으로 진행합니다. 기록 원본은 각자 휴대폰에 있고, 파티에는 요약만 올라갑니다.</p>
+    <button class="btn" style="width:100%" onclick="createParty()">⚔️ 파티 만들기</button>
+    <hr><label class="f" style="margin-top:0">초대 링크나 20자리 코드로 참여</label>
+    <div class="row"><input id="pcode" placeholder="https://…?party=… 또는 코드" style="flex:1;min-width:0"><button class="btn" onclick="joinParty(document.getElementById('pcode').value)">참여</button></div></div>`;
+
+  const st = { off: ["", "연결 안 됨"], wait: ["wait", "연결 중…"], live: ["live", "실시간 연결됨"], error: ["bad", "연결 오류 · 인터넷을 확인해 주세요"],
+    denied: ["bad", "Firebase 규칙에 파티(levelups) 허용이 필요해요 (README 참고)"], nocfg: ["bad", "Firebase 설정 파일이 없어요"] }[party.status] || ["", ""];
+  const me = { ...snapshot(), at: Date.now() };
+  const others = Object.values(party.members).filter(m => m.id !== S.pid && m.name).sort((a, b) => (b.at || 0) - (a.at || 0));
+  if (partySel && partySel !== S.pid && !party.members[partySel]) partySel = null;
+  if (partySel) return mateDetail(partySel === S.pid ? me : party.members[partySel]);
+
+  let h = `<div class="win"><div class="win-h"><span>파티</span></div>
+    <div class="small"><span class="sdot ${st[0]}"></span>${st[1]} · 파티원 ${others.length + 1}명</div>`;
+  if (others.length) {
+    const myDone = (C.D[Math.min(C.T, 66) - 1] || {}).done;
+    const allDone = myDone && others.every(m => m.today && m.today.date === todayStr() && m.today.done);
+    h += `<div class="${allDone ? "clear" : "banner"}" style="margin-top:10px">${allDone ? "오늘 파티 전원 클리어!" : `오늘 클리어: ${[me, ...others].filter(m => m.today && m.today.date === todayStr() && m.today.done).map(m => esc(m.name)).join(", ") || "아직 없음"}`}</div>`;
+    const tg = C.mates.map(m => `${esc(m.name)}님과 함께 클리어 <b>${m.together.length}</b>일`).join(" · ");
+    h += `<p class="small muted" style="margin:8px 0 0">${tg}</p>`;
+  }
+  h += `</div>`;
+  h += [me, ...others].map(m => mateCard(m, m.id === S.pid)).join("");
+  if (!others.length) h += `<div class="win"><p style="margin-top:0"><b>아직 혼자예요.</b> 초대 링크를 보내 주세요.</p>
+    <p class="muted small">받은 사람이 링크를 열면 플레이어 등록 후 자동으로 이 파티에 들어옵니다. 이미 쓰고 있다면 파티 탭에 코드를 넣고 참여하면 돼요.</p></div>`;
+  h += `<div class="win"><div class="win-h"><span>초대</span></div>
+    <button class="btn" style="width:100%" onclick="shareParty()">🔗 초대 링크 보내기</button>
+    <p class="small muted">파티 코드 <span class="code">${S.party}</span><br>링크를 아는 사람은 누구나 파티원 진행 상황을 볼 수 있으니 가족·친구에게만 보내 주세요.</p>
+    <button class="btn ghost bad" style="width:100%" onclick="leaveParty()">파티 나가기</button></div>`;
+  return h;
+}
+function mateCard(m, isMe) {
+  const t = m.today, live = t && t.date === todayStr();
+  const prog = live ? t.items.filter(x => x.v >= x.t).length + "/" + t.items.length : "-";
+  const state = !live ? '<span class="muted small">오늘 기록 없음</span>' : t.done ? `<span class="done">${t.full && !t.rest ? "PERFECT" : "CLEAR"}</span>` : `<span class="small">진행 ${prog}</span>`;
+  return `<button class="mate ${isMe ? "me" : ""}" onclick="partySel='${m.id}';render();scrollTo(0,0)" style="--acc:${esc(m.acc || "#3ab0ff")}">
+    <div class="rank">${esc(m.rank)}</div>
+    <div style="min-width:0"><div class="between"><b>${esc(m.name)}${isMe ? " (나)" : ""}</b><span class="lv">Lv.${m.level}</span></div>
+      <div class="small muted">「${esc(m.title)}」 · ${m.gender === "f" ? "🌙" : "🗡️"} Day ${Math.min(m.day, 66)} · 🔥${m.run}일</div>
+      ${live ? `<div class="bar ${t.done ? "ok" : ""}" style="margin-top:6px"><i style="width:${t.items.length ? t.items.filter(x => x.v >= x.t).length / t.items.length * 100 : 0}%"></i></div>` : ""}
+      <div class="mini">${[...(m.map || "")].map(c => `<i class="${c}"></i>`).join("")}</div>
+      ${!isMe && m.at ? `<div class="small muted" style="margin-top:4px">${ago(m.at)} 업데이트</div>` : ""}</div>
+    <div>${state}</div></button>`;
+}
+function mateDetail(m) {
+  const isMe = m.id === S.pid, t = m.today, live = t && t.date === todayStr();
+  const base = { str: 10, vit: 10, agi: 10, int: 10, per: 10 };
+  let h = `<button class="btn ghost" style="margin-bottom:12px" onclick="partySel=null;render()">← 파티 목록</button>
+    <div class="win" style="--acc:${esc(m.acc || "#3ab0ff")}"><div class="win-h"><span>${isMe ? "내 상태창" : "플레이어 정보"}</span></div>
+    <div class="top"><div class="rank">${esc(m.rank)}</div><div style="flex:1"><div class="between"><span class="name">${esc(m.name)}</span><span class="lv">Lv.${m.level}</span></div>
+      <div class="small muted">「${esc(m.title)}」 · ${m.gender === "f" ? "여자" : "남자"} 버전${m.cycle > 1 ? ` · ${m.cycle}회차` : ""}</div>
+      <div class="bar" style="margin-top:6px"><i style="width:${m.rem / m.need * 100}%"></i></div></div></div>
+    <div class="kv" style="margin-top:12px"><div><b>${m.power}</b><span>전투력</span></div><div><b>${m.run}</b><span>연속(최장 ${m.best})</span></div><div><b>${m.done}</b><span>클리어한 날</span></div>
+      <div><b>${m.ach}</b><span>업적</span></div><div><b>${m.shadows}/6</b><span>그림자</span></div><div><b>${m.sleep || "-"}</b><span>평균 수면(h)</span></div></div>
+    ${radar(m.stats, base)}</div>`;
+  h += `<div class="win"><div class="win-h"><span>오늘의 퀘스트</span></div>`;
+  if (!live) h += `<p class="muted small" style="margin:0">오늘(${todayStr()}) 아직 기록이 없어요.</p>`;
+  else {
+    if (t.rest) h += `<div class="banner rest">🛌 회복의 날</div>`;
+    if (t.pen) h += `<div class="banner bad">⚠️ 패널티 진행 중</div>`;
+    if (t.fat) h += `<p class="small muted" style="margin-top:0">피로도 ${t.fat}/5${t.dl ? " · 디로드 모드" : ""}</p>`;
+    h += t.items.map(x => `<div class="between small" style="padding:5px 0;border-bottom:1px dashed var(--line)"><span>${x.i} ${esc(x.n)}</span><span class="${x.v >= x.t ? "up" : ""}">${fmt(x.v)} / ${fmt(x.t)}${esc(x.u)}</span></div>`).join("");
+    if (t.note) h += `<p class="small" style="margin-bottom:0">✍️ ${esc(t.note)}</p>`;
+    if (t.done) h += `<div class="clear" style="margin-top:10px">${t.full && !t.rest ? "PERFECT CLEAR" : "QUEST CLEAR"}</div>`;
+  }
+  h += `</div>`;
+  if (!isMe) h += `<div class="win"><div class="win-h"><span>응원 보내기</span></div><div class="cheers">
+    ${[["🔥", "오늘도 불태워!"], ["💪", "할 수 있어!"], ["👏", "멋지다!"], ["🛌", "푹 쉬어!"], ["❤️", "사랑해"]].map(([e, msg]) => `<button onclick="cheer('${m.id}','${e}','${msg}')">${e} ${msg}</button>`).join("")}</div></div>`;
+  h += `<div class="win"><div class="win-h"><span>66일 지도</span></div><div class="mini" style="grid-template-columns:repeat(11,1fr);gap:4px">${[...(m.map || "")].map(c => `<i class="${c}"></i>`).join("")}</div></div>`;
+  if (m.growth && m.growth.length) h += `<div class="win"><div class="win-h"><span>측정 성장</span></div>${m.growth.map(g => `<div class="between small" style="padding:4px 0"><span>${esc(g.n)}</span><b class="${g.p >= 0 ? "up" : "down"}">${g.p > 0 ? "+" : ""}${g.p}%</b></div>`).join("")}</div>`;
+  h += `<div class="win"><div class="win-h"><span>최근 업적</span></div>${(m.recent || []).map(a => `<div class="ach got"><div class="ai">${a.i}</div><div><div class="an">${esc(a.n)}</div><div class="ev">${esc(a.ev)}</div></div></div>`).join("") || '<p class="muted small">아직 없음</p>'}</div>`;
+  return h;
+}
+
 // ===== 시작 =====
+invite = (location.search.match(/[?&]party=([a-z0-9]{20})/) || [])[1] || null;
+if (invite) history.replaceState(null, "", location.pathname);
 if (S) {
+  if (!S.pid) { S.pid = newId(12); save(); }
   C = null; refresh(false);
   const T = C.T, y = C.D[T - 2];
   if (T <= 66 && y && !y.ok && !S.seen["pen" + T]) {
@@ -860,6 +1099,11 @@ if (S) {
   if (T > 66) tab = "quest";
 }
 render(); pump();
+if (S && invite) {
+  if (S.party !== invite && confirm(`파티 초대를 받았습니다.${S.party ? "\n(지금 파티에서 나와 새 파티로 옮겨요)" : ""}\n참여할까요?`)) joinParty(invite);
+  invite = null;
+}
+if (S && S.party) connectParty();
 // 자정이 지나 다시 열었을 때 날짜를 새로 맞춘다
 document.addEventListener("visibilitychange", () => { if (!document.hidden && S) { refresh(false); render(); } });
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(() => { /* 오프라인 실행만 안 될 뿐 */ });
