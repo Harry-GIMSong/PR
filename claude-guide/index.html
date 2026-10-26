@@ -40,6 +40,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html { scroll-behavior: smooth; scroll-padding-top: 72px; }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 body {
@@ -125,6 +126,8 @@ tbody th { font-weight: 700; white-space: nowrap; color: var(--muted); font-size
 .term p { font-size: .92rem; }
 .term .ex { font-size: .85rem; color: var(--muted); }
 .gloss-empty { color: var(--muted); }
+.more-btn { justify-self: center; font: inherit; font-size: .92rem; padding: 8px 22px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+.more-btn:hover { border-color: var(--accent); color: var(--accent); }
 
 /* 설정 단계 */
 .steps { display: grid; gap: 12px; counter-reset: step; }
@@ -303,6 +306,7 @@ footer .wrap { padding-block: 24px 40px; }
         </div>
       </div>
       <div class="gloss" id="gloss"></div>
+      <button class="more-btn" id="gloss-more" type="button" aria-expanded="false" aria-controls="gloss" hidden>더보기</button>
       <p class="gloss-empty" id="gloss-empty" hidden>찾는 용어가 없습니다. 다른 단어로 검색해 보세요.</p>
     </section>
 
@@ -818,7 +822,10 @@ match /lunch/{team} {
   var empty = document.getElementById("gloss-empty");
   var q = document.getElementById("gloss-q");
   var chips = document.querySelectorAll(".chip");
+  var more = document.getElementById("gloss-more");
   var cat = "all";
+  var LIMIT = 9;
+  var expanded = false;
 
   function esc(s) { return s.replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c]; }); }
 
@@ -834,22 +841,34 @@ match /lunch/{team} {
   function filter() {
     var s = q.value.trim().toLowerCase();
     var shown = 0;
+    // 검색 중에는 결과를 전부 보여주고, 그 외에는 처음 LIMIT개만 보여줌
+    var cap = s || expanded ? Infinity : LIMIT;
     cards.forEach(function (el) {
       var t = TERMS[+el.dataset.i];
       var ok = (cat === "all" || t[2] === cat) && (!s || t.join(" ").toLowerCase().indexOf(s) !== -1);
-      el.hidden = !ok;
       if (ok) shown++;
+      el.hidden = !ok || shown > cap;
     });
     empty.hidden = shown > 0;
+    more.hidden = !!s || shown <= LIMIT;
+    more.textContent = expanded ? "접기" : "더보기 (" + (shown - LIMIT) + "개 더)";
+    more.setAttribute("aria-expanded", expanded ? "true" : "false");
   }
   q.addEventListener("input", filter);
+  more.addEventListener("click", function () {
+    expanded = !expanded;
+    filter();
+    if (!expanded) document.getElementById("glossary").scrollIntoView();
+  });
   chips.forEach(function (c) {
     c.addEventListener("click", function () {
       cat = c.dataset.cat;
       chips.forEach(function (o) { o.setAttribute("aria-pressed", o === c ? "true" : "false"); });
+      expanded = false;
       filter();
     });
   });
+  filter();
 
   // 코드 블록 복사 버튼
   document.querySelectorAll("main pre").forEach(function (pre) {
