@@ -232,7 +232,7 @@ const REST = [
 ];
 const VER = {
   m: {
-    label: "남자 버전", icon: "🗡️", theme: "blue", job: "그림자 군주",
+    label: "남자 버전", icon: "🗡️", theme: "blue", job: "66일 완주",
     desc: "상체 근력과 지구력 중심. 마지막 날 100 · 100 · 100 · 10km.",
     main: [
       { id: "pushup", name: "팔굽혀펴기", icon: "💪", unit: "회", a: 10, b: 100, step: 5, stat: "str", ms: [1000, 4000], tip: "여러 세트로 나눠도 됩니다. 몸통은 일직선, 가슴이 바닥 가까이." },
@@ -251,10 +251,10 @@ const VER = {
       { id: "su", name: "윗몸일으키기 1분", unit: "회" },
       { id: "km", name: "1km 달리기 기록", unit: "초", lower: true }
     ],
-    trueQ: { pushup: 100, situp: 100, squat: 100, run: 10 }, trueName: "진짜 일일 퀘스트: 100 · 100 · 100 · 10km"
+    trueQ: { pushup: 100, situp: 100, squat: 100, run: 10 }, trueName: "원작 일일 퀘스트: 100 · 100 · 100 · 10km"
   },
   f: {
-    label: "여자 버전", icon: "🌙", theme: "rose", job: "그림자 여제",
+    label: "여자 버전", icon: "🌙", theme: "rose", job: "66일 완주",
     desc: "하체·코어·유연성 중심. 마지막 날 스쿼트 150 · 플랭크 3분 · 12,000보.",
     main: [
       { id: "squat", name: "스쿼트", icon: "🦵", unit: "회", a: 20, b: 150, step: 5, stat: "str", ms: [1000, 6000], tip: "엉덩이를 뒤로 빼며 앉기. 무릎이 안으로 모이지 않게." },
@@ -273,16 +273,16 @@ const VER = {
       { id: "pl", name: "플랭크 최대", unit: "초" },
       { id: "pu", name: "푸시업 최대 (무릎 포함)", unit: "회" }
     ],
-    trueQ: { squat: 200, bridge: 120, plank: 240, walk: 15000 }, trueName: "여제의 일일 퀘스트: 200 · 120 · 4분 · 15,000보"
+    trueQ: { squat: 200, bridge: 120, plank: 240, walk: 15000 }, trueName: "하드 모드: 200 · 120 · 4분 · 15,000보"
   }
 };
 const SHADOWS = [
-  { name: "잿빛 늑대 · 아쉬", icon: "🐺", line: "첫 7일을 버틴 자에게 이빨을 바친다." },
-  { name: "바위 거인 · 보울더", icon: "🗿", line: "흔들리지 않는 습관의 무게." },
-  { name: "흑기사 · 이그니스", icon: "⚔️", line: "30일을 넘긴 검은 결의." },
-  { name: "서리 마녀 · 헬라", icon: "❄️", line: "차갑게, 꾸준하게, 멈추지 않게." },
-  { name: "용병왕 · 바르칸", icon: "🛡️", line: "한계를 넘어선 자만 부릴 수 있다." },
-  { name: "흑룡 · 카이저", icon: "🐉", line: "66일. 이제 그대는 다른 사람이다." }
+  { name: "회색 늑대", icon: "🐺", line: "첫 7일 완주 기념" },
+  { name: "바위 거인", icon: "🗿", line: "17일 완주 기념" },
+  { name: "흑기사", icon: "⚔️", line: "30일 완주 기념" },
+  { name: "서리 마녀", icon: "❄️", line: "45일 완주 기념" },
+  { name: "용병왕", icon: "🛡️", line: "58일 완주 기념" },
+  { name: "흑룡", icon: "🐉", line: "66일 완주 기념" }
 ];
 const THEMES = [
   { id: "blue", name: "시스템 블루", acc: "#3ab0ff", acc2: "#7c5cff" },
@@ -292,7 +292,7 @@ const THEMES = [
   { id: "crimson", name: "크림슨", acc: "#ff4d6d", acc2: "#ff9a3d", need: "boss_C" },
   { id: "frost", name: "서리", acc: "#7ff3ff", acc2: "#b38bff", need: "boss_B" },
   { id: "silver", name: "백은", acc: "#e3ecfa", acc2: "#8fb4ff", need: "boss_A" },
-  { id: "monarch", name: "군주", acc: "#a77bff", acc2: "#4a1fb8", need: "boss_S" }
+  { id: "monarch", name: "미드나잇", acc: "#a77bff", acc2: "#4a1fb8", need: "boss_S" }
 ];
 
 // ===== 저장 =====
@@ -302,6 +302,10 @@ function load() {
   try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.v === 1) return s; } catch (e) { /* 저장소를 못 쓰면 새로 시작 */ }
   return null;
 }
+const OLD_TITLES = { "각성자": "새내기", "꾸준한 자": "일주일 개근", "습관의 지배자": "습관 장착", "완전무결": "66일 개근", "패널티 존 생존자": "오뚝이",
+  "증명하는 자": "숫자로 증명", "다시 태어난 자": "두 배 성장", "늑대 사냥꾼": "E랭크 졸업", "그림자 군주": "66일 완주", "그림자 여제": "66일 완주",
+  "고랭크 헌터": "레벨 40", "새벽의 사냥꾼": "아침형 인간", "한계를 넘은 자": "초과 달성러", "진짜 플레이어": "원작 재현", "최고의 파티": "환상의 짝꿍", "운명 공동체": "30일 함께" };
+if (S && OLD_TITLES[S.title]) S.title = OLD_TITLES[S.title];
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* 저장 실패해도 화면은 계속 */ } }
 function fresh(name, gender, start) {
   return { v: 1, name, gender, start, cycle: 1, days: {}, alloc: { str: 0, vit: 0, agi: 0, int: 0, per: 0 },
@@ -420,13 +424,13 @@ function derive() {
 function achList() {
   const v = VER[S.gender], L = [];
   const A = (id, cat, icon, name, desc, fn, extra = {}) => L.push({ id, cat, icon, name, desc, fn, ...extra });
-  A("first", "habit", "🌱", "각성", "첫 일일 퀘스트 완료", C => { const x = C.D.find(x => x.done); return x && `Day ${x.d} (${x.date}) 첫 클리어`; });
-  [[3, "🔥", "사흘의 벽", null], [7, "📅", "일주일의 증명", "꾸준한 자"], [21, "🧠", "습관의 문턱", "습관의 지배자"], [45, "⛰️", "흔들리지 않는 자", null], [66, "👑", "66일 완전무결", "완전무결"]]
+  A("first", "habit", "🌱", "첫 클리어", "첫 일일 퀘스트 완료", C => { const x = C.D.find(x => x.done); return x && `Day ${x.d} (${x.date}) 첫 클리어`; });
+  [[3, "🔥", "사흘의 벽", null], [7, "📅", "일주일 연속", "일주일 개근"], [21, "🧠", "21일 연속", "습관 장착"], [45, "⛰️", "45일 연속", null], [66, "👑", "66일 연속", "66일 개근"]]
     .forEach(([n, ic, nm, title]) => A("s" + n, "habit", ic, nm, `${n}일 연속 완료 (회복권 포함)`,
       C => C.best.len >= n && `Day ${C.best.s} ~ Day ${C.best.s + n - 1}, ${n}일 연속`, { title }));
   [10, 30, 50].forEach(n => A("c" + n, "habit", "🗓️", `누적 ${n}일 클리어`, `일일 퀘스트를 ${n}번 완료`,
     C => { const x = C.D.filter(x => x.done)[n - 1]; return x && `${n}번째 클리어: Day ${x.d} (${x.date})`; }));
-  A("comeback", "habit", "🩸", "패널티 존 생존자", "놓친 다음 날 패널티 퀘스트까지 완료", C => { const x = C.D.find(x => x.pen && x.done); return x && `Day ${x.d - 1} 실패 → Day ${x.d} 패널티 극복`; }, { title: "패널티 존 생존자" });
+  A("comeback", "habit", "🩹", "다시 일어서기", "놓친 다음 날 보충 운동까지 완료", C => { const x = C.D.find(x => x.pen && x.done); return x && `Day ${x.d - 1} 놓침 → Day ${x.d} 보충 운동까지 완료`; }, { title: "오뚝이" });
 
   // 성장: 첫 기록 대비 배수
   [[2, "📈", "첫날의 2배"], [3, "🚀", "첫날의 3배"]].forEach(([k, ic, nm]) => A("x" + k, "growth", ic, nm, `한 종목에서 처음 기록의 ${k}배 달성`, C => {
@@ -437,47 +441,47 @@ function achList() {
       if (hit) return `${q.name}: Day ${xs[0].d} ${fmt(xs[0].v)}${q.unit} → Day ${hit.d} ${fmt(hit.v)}${q.unit}`;
     }
   }));
-  [[20, "📏", "측정된 성장", null], [50, "💎", "증명하는 자", "증명하는 자"], [100, "🦋", "다시 태어난 자", "다시 태어난 자"]].forEach(([p, ic, nm, title]) =>
+  [[20, "📏", "20% 성장", null], [50, "💎", "50% 성장", "숫자로 증명"], [100, "🦋", "100% 성장", "두 배 성장"]].forEach(([p, ic, nm, title]) =>
     A("g" + p, "growth", ic, nm, `측정의 날 기록이 첫 측정보다 ${p}% 이상 향상`, C => {
       const x = C.ev.filter(x => x.pct >= p).sort((a, b) => b.pct - a.pct)[0];
       return x && `${x.e.name}: Day ${x.a.d} ${x.e.unit === "초" ? secs(x.a.v) : fmt(x.a.v) + x.e.unit} → Day ${x.b.d} ${x.e.unit === "초" ? secs(x.b.v) : fmt(x.b.v) + x.e.unit} (+${Math.round(x.pct)}%)`;
     }, { title }));
-  A("eval4", "growth", "🧾", "자기 객관화", "측정의 날 4번 모두 기록", C => C.evN >= 4 && `Day ${EVAL_DAYS.join(" · ")} 측정 완료`);
-  A("notes10", "growth", "✍️", "기록하는 헌터", "변화 일지 10번 작성", C => { const x = C.D.filter(x => (x.rec.note || "").trim())[9]; return x && `10번째 일지 Day ${x.d}: "${x.rec.note.slice(0, 30)}"`; });
+  A("eval4", "growth", "🧾", "측정 4번 완료", "측정의 날 4번 모두 기록", C => C.evN >= 4 && `Day ${EVAL_DAYS.join(" · ")} 측정 완료`);
+  A("notes10", "growth", "✍️", "일지 10개", "변화 일지 10번 작성", C => { const x = C.D.filter(x => (x.rec.note || "").trim())[9]; return x && `10번째 일지 Day ${x.d}: "${x.rec.note.slice(0, 30)}"`; });
   A("power", "growth", "⚔️", "전투력 300", "전투력 300 돌파", C => C.power >= 300 && `Lv.${C.level} 전투력 ${C.power}`);
 
   // 회복
-  A("sleep7", "rest", "🌙", "숙면의 기술", "7일 연속 7시간 이상 수면", C => C.bestSleepRun >= 7 && `최장 ${C.bestSleepRun}일 연속 7시간+, 평균 ${fmt(C.sleepAvg)}시간`);
-  A("rest3", "rest", "🛌", "회복도 훈련이다", "회복의 날 퀘스트 3번 완료", C => { const x = C.D.filter(x => x.rest && x.done)[2]; return x && `3번째 회복의 날: Day ${x.d}`; });
-  A("deload", "rest", "🧯", "현명한 후퇴", "피로도가 높은 날 디로드로 버텨내기", C => { const x = C.D.find(x => x.rec.dl && x.done); return x && `Day ${x.d} 피로도 ${x.rec.fat} → 70% 강도로 클리어`; });
-  A("shield", "rest", "🛡️", "전략적 휴식", "회복권 사용", C => C.used > 0 && `Day ${Object.keys(S.shields).sort((a, b) => a - b)[0]}에 회복권 사용`);
+  A("sleep7", "rest", "🌙", "7일 연속 숙면", "7일 연속 7시간 이상 수면", C => C.bestSleepRun >= 7 && `최장 ${C.bestSleepRun}일 연속 7시간+, 평균 ${fmt(C.sleepAvg)}시간`);
+  A("rest3", "rest", "🛌", "회복의 날 3번", "회복의 날 퀘스트 3번 완료", C => { const x = C.D.filter(x => x.rest && x.done)[2]; return x && `3번째 회복의 날: Day ${x.d}`; });
+  A("deload", "rest", "🧯", "무리하지 않기", "피로도가 높은 날 디로드로 클리어", C => { const x = C.D.find(x => x.rec.dl && x.done); return x && `Day ${x.d} 피로도 ${x.rec.fat} → 70% 강도로 클리어`; });
+  A("shield", "rest", "🛡️", "회복권 사용", "회복권 사용", C => C.used > 0 && `Day ${Object.keys(S.shields).sort((a, b) => a - b)[0]}에 회복권 사용`);
 
   // 누적
   for (const q of v.main) q.ms.forEach((m, i) => A(`t_${q.id}_${i}`, "total", q.icon, `${q.name} ${fmt(m)}${q.unit}`, `누적 ${q.name} ${fmt(m)}${q.unit}`,
     C => (C.tot[q.id] || 0) >= m && `Day ${C.last}까지 누적 ${fmt(C.tot[q.id])}${q.unit}`));
 
   // 보스
-  RANKS.forEach((r, i) => A("boss_" + r.id, "rank", SHADOWS[i].icon, `${r.id}랭크 보스 처치`, `Day ${r.to} 보스 날(또는 그 뒤) 서브 퀘스트까지 전부 클리어`,
-    C => C.bosses[i] && `Day ${C.bosses[i]} 처치 · 그림자 '${SHADOWS[i].name}' 추출`,
-    { title: i === 0 ? "늑대 사냥꾼" : i === 5 ? v.job : null }));
-  [[10, "🔟"], [25, "🌀"], [40, "🌌"]].forEach(([n, ic]) => A("lv" + n, "rank", ic, `레벨 ${n}`, `레벨 ${n} 달성`, C => C.level >= n && `Day ${C.last}, 누적 경험치 ${C.xp}`, { title: n === 40 ? "고랭크 헌터" : null }));
+  RANKS.forEach((r, i) => A("boss_" + r.id, "rank", SHADOWS[i].icon, `${r.id}랭크 보스 클리어`, `Day ${r.to} 보스 날(또는 그 뒤) 서브 퀘스트까지 전부 완료`,
+    C => C.bosses[i] && `Day ${C.bosses[i]} 클리어 · 동료 카드 '${SHADOWS[i].name}'`,
+    { title: i === 0 ? "E랭크 졸업" : i === 5 ? v.job : null }));
+  [[10, "🔟"], [25, "🌀"], [40, "🌌"]].forEach(([n, ic]) => A("lv" + n, "rank", ic, `레벨 ${n}`, `레벨 ${n} 달성`, C => C.level >= n && `Day ${C.last}, 누적 경험치 ${C.xp}`, { title: n === 40 ? "레벨 40" : null }));
 
   // 숨겨진 업적
   const hour = (x, f) => { if (!x.done || !x.rec.doneAt) return false; const t = new Date(x.rec.doneAt); return ymd(t) === x.date && f(t.getHours()); };
-  A("dawn", "hidden", "🌅", "새벽의 사냥꾼", "???", C => { const x = C.D.find(x => hour(x, h => h < 7)); return x && `Day ${x.d} ${new Date(x.rec.doneAt).toTimeString().slice(0, 5)} 클리어`; }, { title: "새벽의 사냥꾼", hint: "해 뜨기 전에 클리어" });
-  A("night", "hidden", "🌃", "자정의 생존자", "???", C => { const x = C.D.find(x => hour(x, h => h >= 23)); return x && `Day ${x.d} ${new Date(x.rec.doneAt).toTimeString().slice(0, 5)} 클리어`; }, { hint: "마감 직전 클리어" });
-  A("berserk", "hidden", "😤", "폭주", "???", C => { const x = C.D.find(x => !x.rest && !x.rec.dl && x.main.every(m => m.v >= m.t * 1.5)); return x && `Day ${x.d} 본 퀘스트 전부 150% 이상`; }, { hint: "모든 본 퀘스트를 한참 넘게" });
-  A("over10", "hidden", "🔺", "한계를 넘은 자", "???", C => C.over >= 10 && `목표 150% 이상 ${C.over}회`, { title: "한계를 넘은 자", hint: "목표의 1.5배를 10번" });
-  A("true", "hidden", "☠️", v.trueName, "???", C => { const x = C.D.find(x => !x.rest && Object.entries(v.trueQ).every(([k, n]) => (+(x.rec.q || {})[k] || 0) >= n)); return x && `Day ${x.d} 달성`; }, { title: "진짜 플레이어", hint: "원작의 그 퀘스트" });
+  A("dawn", "hidden", "🌅", "아침형 인간", "???", C => { const x = C.D.find(x => hour(x, h => h < 7)); return x && `Day ${x.d} ${new Date(x.rec.doneAt).toTimeString().slice(0, 5)} 클리어`; }, { title: "아침형 인간", hint: "아침 7시 전에 클리어" });
+  A("night", "hidden", "🌃", "막차 탑승", "???", C => { const x = C.D.find(x => hour(x, h => h >= 23)); return x && `Day ${x.d} ${new Date(x.rec.doneAt).toTimeString().slice(0, 5)} 클리어`; }, { hint: "마감 직전 클리어" });
+  A("berserk", "hidden", "😤", "과몰입", "???", C => { const x = C.D.find(x => !x.rest && !x.rec.dl && x.main.every(m => m.v >= m.t * 1.5)); return x && `Day ${x.d} 본 퀘스트 전부 150% 이상`; }, { hint: "모든 본 퀘스트를 한참 넘게" });
+  A("over10", "hidden", "🔺", "초과 달성 10번", "???", C => C.over >= 10 && `목표 150% 이상 ${C.over}회`, { title: "초과 달성러", hint: "목표의 1.5배를 10번" });
+  A("true", "hidden", "☠️", v.trueName, "???", C => { const x = C.D.find(x => !x.rest && Object.entries(v.trueQ).every(([k, n]) => (+(x.rec.q || {})[k] || 0) >= n)); return x && `Day ${x.d} 달성`; }, { title: "원작 재현", hint: "원작의 그 퀘스트" });
   A("alloc", "hidden", "🧩", "성장 설계자", "???", () => Object.values(S.alloc).some(n => n > 0) && "능력치 포인트 첫 분배", { hint: "남은 포인트를 써 보기" });
   A("custom", "hidden", "📝", "나만의 퀘스트", "???", () => S.custom.length > 0 && `'${S.custom[0].name}' 생성`, { hint: "해금된 칸에 퀘스트 추가" });
 
   // 파티: 함께 하는 사람이 있을 때만 열린다
   A("party1", "party", "🤝", "파티 결성", "다른 플레이어와 파티 맺기", C => C.mates.length > 0 && `'${C.mates.map(m => m.name).join("', '")}'님과 파티 결성`);
   A("tg1", "party", "👫", "함께 클리어", "같은 날 파티원과 둘 다 클리어", C => { const m = C.mates.find(m => m.together.length); return m && `${m.together[0]} ${m.name}님과 함께 클리어`; });
-  A("tg7", "party", "💞", "함께한 일주일", "파티원과 같은 날 클리어 7번", C => { const m = C.mates.find(m => m.together.length >= 7); return m && `${m.name}님과 함께 클리어 ${m.together.length}일 (7번째 ${m.together[6]})`; }, { title: "최고의 파티" });
-  A("tg30", "party", "💍", "운명 공동체", "파티원과 같은 날 클리어 30번", C => { const m = C.mates.find(m => m.together.length >= 30); return m && `${m.name}님과 함께 클리어 ${m.together.length}일`; }, { title: "운명 공동체" });
-  A("cheer1", "party", "📣", "응원을 받은 자", "파티원에게 응원 받기", () => (S.cheerGot || 0) > 0 && `응원 ${S.cheerGot}번 받음`);
+  A("tg7", "party", "💞", "7일 함께", "파티원과 같은 날 클리어 7번", C => { const m = C.mates.find(m => m.together.length >= 7); return m && `${m.name}님과 함께 클리어 ${m.together.length}일 (7번째 ${m.together[6]})`; }, { title: "환상의 짝꿍" });
+  A("tg30", "party", "💍", "30일 함께", "파티원과 같은 날 클리어 30번", C => { const m = C.mates.find(m => m.together.length >= 30); return m && `${m.name}님과 함께 클리어 ${m.together.length}일`; }, { title: "30일 함께" });
+  A("cheer1", "party", "📣", "응원 받음", "파티원에게 응원 받기", () => (S.cheerGot || 0) > 0 && `응원 ${S.cheerGot}번 받음`);
   A("cheer10", "party", "🎺", "응원단장", "파티원에게 응원 10번 보내기", () => (S.cheerSent || 0) >= 10 && `응원 ${S.cheerSent}번 보냄`);
   return L;
 }
@@ -490,14 +494,14 @@ function refresh(notify = true) {
   const prev = C;
   C = derive();
   if (notify && prev) {
-    if (C.level > prev.level) queue.push({ big: "⬆️", title: "LEVEL UP!", body: `레벨이 올랐습니다. Lv.${prev.level} → Lv.${C.level}\n능력치 포인트 +${(C.level - prev.level) * 3}` });
+    if (C.level > prev.level) queue.push({ big: "⬆️", title: "LEVEL UP!", body: `Lv.${prev.level} → Lv.${C.level}\n능력치 포인트 +${(C.level - prev.level) * 3}` });
     for (const i in C.bosses) if (!prev.bosses[i]) {
       const sh = SHADOWS[i];
-      queue.push({ big: sh.icon, title: "일어나라.", body: `${RANKS[i].id}랭크 던전 보스를 처치했습니다.\n그림자 '${sh.name}' 추출 성공\n"${sh.line}"` });
+      queue.push({ big: sh.icon, title: `${RANKS[i].id}랭크 보스 클리어!`, body: `동료 카드 '${sh.name}'를 받았어요.\n${sh.line}` });
     }
     for (const x of C.D) {
       const p = prev.D[x.d - 1];
-      if (x.done && p && !p.done) queue.push({ big: x.rest ? "🛌" : "✅", title: x.rest ? "회복 완료" : "일일 퀘스트 완료", body: `Day ${x.d} 퀘스트를 완료했습니다.\n보상: 경험치 +${C.xp - prev.xp}${x.full && !x.rest ? "\n서브 퀘스트까지 완벽 클리어!" : ""}` });
+      if (x.done && p && !p.done) queue.push({ big: x.rest ? "🛌" : "✅", title: x.rest ? "회복 완료" : "일일 퀘스트 완료", body: `Day ${x.d} 퀘스트 완료!\n경험치 +${C.xp - prev.xp}${x.full && !x.rest ? "\n서브 퀘스트까지 다 했어요!" : ""}` });
     }
   }
   for (const a of ACH()) {
@@ -542,7 +546,7 @@ function go(t) { tab = t; render(); scrollTo(0, 0); }
 
 function header() {
   const d = Math.min(Math.max(C.T, 1), 66), r = RANKS[rankIdx(d)];
-  const title = S.title || "각성자";
+  const title = S.title || "새내기";
   return `<div class="win"><div class="top">
     <div class="rank">${r.id}</div>
     <div style="flex:1;min-width:0">
@@ -556,17 +560,17 @@ function header() {
 function onboarding() {
   const g = window._g || "m";
   const list = k => VER[k].main.map(q => `<li>${q.name} ${fmt(q.a)} → ${fmt(q.b)}${q.unit}</li>`).join("");
-  return `<div class="win" style="margin-top:20px"><div class="win-h"><span>알림</span></div>
-    <p style="text-align:center;font-weight:700;font-size:17px;margin:0">[플레이어가 될 자격을 얻었습니다.]</p>
+  return `<div class="win" style="margin-top:20px"><div class="win-h"><span>START</span></div>
+    <p style="text-align:center;font-weight:700;font-size:17px;margin:0">66일 습관 챌린지</p>
     <p class="muted small" style="text-align:center">66일 동안 E랭크부터 S랭크까지. 처음엔 쉽게, 날마다 조금씩 강해집니다.<br>
     일주일에 한 번은 <b style="color:var(--rest)">회복의 날</b>, 22일마다 <b style="color:var(--gold)">측정의 날</b>이 찾아옵니다.</p>
-    ${invite ? `<div class="banner" style="margin-top:10px">👥 <b>파티 초대를 받았습니다.</b> 플레이어 등록을 마치면 파티에 자동으로 들어갑니다.</div>` : ""}
-    <label class="f">플레이어 이름</label><input id="ob-name" maxlength="16" placeholder="성진우" value="${esc(window._n || "")}">
+    ${invite ? `<div class="banner" style="margin-top:10px">👥 <b>파티 초대를 받았습니다.</b> 이름을 정하고 시작하면 파티에 자동으로 들어가요.</div>` : ""}
+    <label class="f">이름 (닉네임)</label><input id="ob-name" maxlength="16" placeholder="닉네임" value="${esc(window._n || "")}">
     <label class="f">버전 선택</label>
     <div class="gcards">${["m", "f"].map(k => `<button class="gcard ${g === k ? "on" : ""}" onclick="window._n=document.getElementById('ob-name').value;window._g='${k}';render()">
       <b>${VER[k].icon} ${VER[k].label}</b><div class="small muted">${VER[k].desc}</div><ul>${list(k)}</ul></button>`).join("")}</div>
     <label class="f">시작일 (Day 1)</label><input type="date" id="ob-start" value="${todayStr()}" max="${todayStr()}">
-    <button class="btn" style="width:100%;margin-top:16px" onclick="accept()">수락한다</button>
+    <button class="btn" style="width:100%;margin-top:16px" onclick="accept()">시작하기</button>
     <p class="muted small" style="text-align:center;margin:10px 0 0">기록은 이 기기의 브라우저에만 저장됩니다. 상태창에서 백업할 수 있어요.</p></div>`;
 }
 function accept() {
@@ -575,7 +579,7 @@ function accept() {
   S = fresh(name, window._g || "m", start > todayStr() ? todayStr() : start);
   tab = "quest"; viewDay = null; C = null;
   refresh(false);
-  queue.push({ big: "🗝️", title: "플레이어 등록 완료", body: `${S.name}님, 시스템에 오신 것을 환영합니다.\n일일 퀘스트를 완료하지 않으면 패널티가 주어집니다.` });
+  queue.push({ big: "🌱", title: "시작!", body: `${S.name}님, 오늘이 Day 1이에요.\n매일 퀘스트를 채우면 레벨이 오르고,\n못 한 날은 다음 날 보충 운동이 하나 붙어요.` });
   render(); pump();
   if (invite) { joinParty(invite); invite = null; }
 }
@@ -589,28 +593,28 @@ function questView() {
   const d = viewDay, x = C.D[d - 1], rec = S.days[d] || {};
   const r = RANKS[x.r], v = VER[S.gender];
   let h = "";
-  if (T > 66) h += `<div class="banner">66일이 지났습니다. 어제(Day 66) 기록만 고칠 수 있어요. <button class="btn" style="margin-top:6px" onclick="window._fin=1;render()">여정 결산 보기</button></div>`;
+  if (T > 66) h += `<div class="banner">66일이 지났습니다. 어제(Day 66) 기록만 고칠 수 있어요. <button class="btn" style="margin-top:6px" onclick="window._fin=1;render()">결산 보기</button></div>`;
   h += `<div class="win"><div class="win-h"><span>${x.rest ? "회복의 날" : "일일 퀘스트"}</span></div>`;
   if (editable.length > 1) h += `<div class="daysel">${editable.map(e => `<button class="${e === d ? "on" : ""}" onclick="viewDay=${e};render()">${e === T ? "오늘" : "어제"} · Day ${e} ${C.D[e - 1].done ? "✅" : ""}</button>`).join("")}</div>`;
-  h += `<div class="goal">${dateOf(d)} · ${r.id}랭크 던전 · ${x.rest ? "근육이 자라는 날" : "강해지기 위한 훈련"}</div>`;
-  if (BOSS_DAYS.includes(d) && !C.bosses[x.r]) h += `<div class="banner">⚔️ <b>보스 출현!</b> 오늘 서브 퀘스트까지 모두 끝내면 ${r.id}랭크 보스를 처치하고 그림자를 얻습니다. (디로드 제외)</div>`;
-  else if (Object.keys(RANKS).some(i => !C.bosses[i] && RANKS[i].to < d)) h += `<div class="banner">⚔️ 놓친 보스가 남아 있습니다. 서브 퀘스트까지 모두 끝내는 날 재도전으로 처치됩니다.</div>`;
-  if (x.rest) h += `<div class="banner rest">🛌 <b>회복의 날.</b> 오늘은 강도 높은 운동 금지. 근육은 쉬는 동안 자랍니다. 아래 회복 퀘스트가 오늘의 일일 퀘스트예요.</div>`;
-  if (x.pen) h += `<div class="banner bad">⚠️ <b>패널티 퀘스트</b> Day ${d - 1} 일일 퀘스트 미완료. 오늘은 패널티까지 끝내야 클리어됩니다.
+  h += `<div class="goal">${dateOf(d)} · ${r.id}랭크 · ${x.rest ? "쉬는 날" : "운동하는 날"}</div>`;
+  if (BOSS_DAYS.includes(d) && !C.bosses[x.r]) h += `<div class="banner">⚔️ <b>보스 날</b> · 오늘 서브 퀘스트까지 다 하면 ${r.id}랭크 보스 클리어, 동료 카드를 받아요. (디로드 제외)</div>`;
+  else if (Object.keys(RANKS).some(i => !C.bosses[i] && RANKS[i].to < d)) h += `<div class="banner">⚔️ 놓친 보스가 있어요. 서브 퀘스트까지 다 하는 날 다시 클리어할 수 있어요.</div>`;
+  if (x.rest) h += `<div class="banner rest">🛌 <b>회복의 날</b> · 오늘은 쉬는 날이에요. 가볍게 풀어 주고 푹 자는 게 오늘의 퀘스트예요.</div>`;
+  if (x.pen) h += `<div class="banner bad">⚠️ <b>보충 운동</b> · Day ${d - 1}을 놓쳐서 오늘은 하나가 더 있어요.
     <label class="tick" style="margin:8px 0 0"><input type="checkbox" ${rec.pen ? "checked" : ""} onchange="setPen(${d},this.checked)"> ${v.pen(x.r)}</label></div>`;
 
   // 컨디션
   if (!x.rest) {
     h += `<div class="sec">CONDITION · 피로도</div><div class="fat">${[1, 2, 3, 4, 5].map(n => `<button class="${rec.fat === n ? "on" : ""}" onclick="setFat(${d},${n})">${["😄 최상", "🙂 좋음", "😐 보통", "😮‍💨 지침", "🥵 한계"][n - 1]}</button>`).join("")}</div>`;
     if (rec.fat >= 4) h += `<label class="tick" style="margin-top:8px"><input type="checkbox" ${rec.dl ? "checked" : ""} onchange="setDl(${d},this.checked)">
-      <span><b>디로드 모드</b> — 본 퀘스트 목표 70%, 경험치 절반. 연속 기록은 지켜집니다.<br><span class="muted small">무리해서 다치면 66일을 못 채웁니다. 잠이 부족하거나 근육통이 심하면 켜세요.</span></span></label>`;
+      <span><b>디로드 모드</b> — 본 퀘스트 목표 70%, 경험치 절반. 연속 기록은 지켜집니다.<br><span class="muted small">잠이 부족하거나 근육통이 심한 날엔 켜 두세요. 다치지 않는 게 먼저예요.</span></span></label>`;
   }
   h += `<div class="sec">${x.rest ? "RECOVERY · 회복 퀘스트" : `MAIN · 본 퀘스트 ${rec.dl ? "(디로드 70%)" : ""}`}</div>` + x.main.map(m => qrow(d, m)).join("");
   if (x.sub.length) h += `<div class="sec">SUB · 서브 퀘스트 <span class="muted small">(보스 처치 조건)</span></div>` + x.sub.map(m => qrow(d, m)).join("");
   if (S.custom.length) h += `<div class="sec">MY · 나만의 퀘스트</div>` + S.custom.map(c => `<label class="tick"><input type="checkbox" ${rec.c && rec.c[c.id] ? "checked" : ""} onchange="setCustom(${d},'${c.id}',this.checked)"> ${esc(c.name)} <span class="chip">${STAT_ICON[c.stat]} ${STATS[c.stat]}</span></label>`).join("");
   h += `<div class="sec">LOG · 변화 일지</div><textarea id="note" rows="2" style="width:100%" maxlength="200" placeholder="오늘 달라진 점 한 줄 (예: 계단 오를 때 숨이 덜 찼다)" onchange="setNote(${d},this.value)">${esc(rec.note || "")}</textarea>`;
   h += x.done ? `<div class="clear" style="margin-top:12px">${x.full && !x.rest ? "PERFECT CLEAR" : "QUEST CLEAR"}</div>` :
-    `<p class="muted small" style="text-align:center;margin:12px 0 0">${x.rest ? "회복 퀘스트" : "본 퀘스트"}를 모두 채우면 클리어. 놓치면 다음 날 패널티가 붙습니다.</p>`;
+    `<p class="muted small" style="text-align:center;margin:12px 0 0">${x.rest ? "회복 퀘스트" : "본 퀘스트"}를 모두 채우면 클리어. 놓치면 다음 날 보충 운동이 붙어요.</p>`;
   h += `</div>`;
   h += evalCard();
   return h;
@@ -641,10 +645,10 @@ function evalCard() {
 }
 function finishView() {
   const n = C.doneCount, sh = Object.keys(C.bosses).length;
-  return `<div class="win"><div class="win-h"><span>여정 결산</span></div>
+  return `<div class="win"><div class="win-h"><span>66일 결산</span></div>
     <div style="text-align:center"><div style="font-size:48px">${sh === 6 ? "🐉" : "🏁"}</div>
-    <div class="mt" style="font-size:20px;font-weight:900">66일의 여정이 끝났습니다</div>
-    <p class="muted">클리어 ${n}/66일 · 최장 연속 ${C.best.len}일 · Lv.${C.level} · 그림자 ${sh}/6</p></div>
+    <div class="mt" style="font-size:20px;font-weight:900">66일 완주!</div>
+    <p class="muted">클리어 ${n}/66일 · 최장 연속 ${C.best.len}일 · Lv.${C.level} · 동료 카드 ${sh}/6</p></div>
     ${growthTable()}
     <hr><p class="small muted">2회차는 레벨·능력치·업적·해금을 그대로 이어서, 모든 목표가 25% 더 높아진 상태로 다시 Day 1부터 시작합니다.</p>
     <button class="btn" style="width:100%" onclick="newCycle()">${S.cycle + 1}회차 시작 (뉴 게임+)</button></div>`;
@@ -706,7 +710,7 @@ function growthTable() {
 
 // --- 기록 ---
 function logView() {
-  let h = `<div class="win"><div class="win-h"><span>66일 던전 지도</span></div><div class="map">`;
+  let h = `<div class="win"><div class="win-h"><span>66일 기록</span></div><div class="map">`;
   for (let d = 1; d <= 66; d++) {
     const x = C.D[d - 1];
     let cls = "fut";
@@ -780,27 +784,27 @@ function achView() {
 // --- 해금 ---
 function unlockView() {
   const list = ACH();
-  const titles = [{ t: "각성자", ok: true }].concat(list.filter(a => a.title).map(a => ({ t: a.title, ok: !!S.ach[a.id], a })));
+  const titles = [{ t: "새내기", ok: true }].concat(list.filter(a => a.title).map(a => ({ t: a.title, ok: !!S.ach[a.id], a })));
   const slots = ["boss_E", "boss_D", "boss_C"].filter(id => S.ach[id]).length;
   let h = `<div class="win"><div class="win-h"><span>칭호</span></div><div class="cards">
-    ${titles.map(x => `<button class="card ${(S.title || "각성자") === x.t ? "on" : ""} ${x.ok ? "" : "lock"}" ${x.ok ? `onclick="S.title='${esc(x.t)}';save();render()"` : "disabled"}>
-      <b>${x.ok ? esc(x.t) : "🔒 ???"}</b><div class="small muted">${x.ok ? ((S.title || "각성자") === x.t ? "장착 중" : "눌러서 장착") : esc(x.a.cat === "hidden" ? x.a.hint : x.a.name)}</div></button>`).join("")}</div></div>`;
+    ${titles.map(x => `<button class="card ${(S.title || "새내기") === x.t ? "on" : ""} ${x.ok ? "" : "lock"}" ${x.ok ? `onclick="S.title='${esc(x.t)}';save();render()"` : "disabled"}>
+      <b>${x.ok ? esc(x.t) : "🔒 ???"}</b><div class="small muted">${x.ok ? ((S.title || "새내기") === x.t ? "장착 중" : "눌러서 장착") : esc(x.a.cat === "hidden" ? x.a.hint : x.a.name)}</div></button>`).join("")}</div></div>`;
 
-  h += `<div class="win"><div class="win-h"><span>그림자 군단</span></div><p class="muted small" style="margin-top:0">각 랭크 마지막 날의 보스를 처치하면 그림자를 추출합니다.</p><div class="cards">
+  h += `<div class="win"><div class="win-h"><span>동료 카드</span></div><p class="muted small" style="margin-top:0">각 랭크 마지막 날 보스를 클리어하면 한 장씩 모여요.</p><div class="cards">
     ${SHADOWS.map((s, i) => { const g = S.ach["boss_" + RANKS[i].id]; return `<div class="card ${g ? "on" : "lock"}"><div class="big">${g ? s.icon : "🌑"}</div>
       <b>${g ? s.name : `${RANKS[i].id}랭크 보스`}</b><div class="small muted">${g ? s.line : `Day ${RANKS[i].to} 출현`}</div></div>`; }).join("")}</div></div>`;
 
   h += `<div class="win"><div class="win-h"><span>테마</span></div><div class="cards">
     ${THEMES.map(t => { const ok = !t.need || S.ach[t.need]; return `<button class="card ${S.theme === t.id ? "on" : ""} ${ok ? "" : "lock"}" ${ok ? `onclick="S.theme='${t.id}';save();render()"` : "disabled"}>
       <div class="sw" style="background:linear-gradient(90deg,${t.acc2},${t.acc})"></div><b>${ok ? t.name : "🔒 " + t.name}</b>
-      <div class="small muted">${ok ? (S.theme === t.id ? "사용 중" : "") : `${t.need.slice(5)}랭크 보스 처치`}</div></button>`; }).join("")}</div></div>`;
+      <div class="small muted">${ok ? (S.theme === t.id ? "사용 중" : "") : `${t.need.slice(5)}랭크 보스 클리어`}</div></button>`; }).join("")}</div></div>`;
 
   h += `<div class="win"><div class="win-h"><span>나만의 퀘스트</span></div>
     <p class="muted small" style="margin-top:0">E·D·C랭크 보스를 처치할 때마다 한 칸씩 열립니다. (${slots}/3칸) 금연, 일찍 자기, 영어 공부… 무엇이든.</p>
     ${S.custom.map(c => `<div class="tick"><span style="flex:1">${esc(c.name)} <span class="chip">${STAT_ICON[c.stat]} ${STATS[c.stat]}</span></span><button class="btn ghost" onclick="delCustom('${c.id}')">삭제</button></div>`).join("")}
     ${S.custom.length < slots ? `<div class="row"><input id="cq-name" placeholder="퀘스트 이름" maxlength="24" style="flex:1;min-width:0">
       <select id="cq-stat">${Object.keys(STATS).map(k => `<option value="${k}">${STATS[k]}</option>`).join("")}</select><button class="btn" onclick="addCustom()">추가</button></div>`
-      : slots < 3 ? `<p class="small muted">🔒 다음 칸: ${["E", "D", "C"][slots]}랭크 보스 처치</p>` : ""}</div>`;
+      : slots < 3 ? `<p class="small muted">🔒 다음 칸: ${["E", "D", "C"][slots]}랭크 보스 클리어</p>` : ""}</div>`;
 
   h += `<div class="win"><div class="win-h"><span>회복권</span></div>
     <div class="between"><span>🛡️ 보유 <b>${C.shields}</b>장 <span class="muted small">(획득 ${C.earned} · 사용 ${C.used})</span></span></div>
@@ -872,7 +876,7 @@ document.getElementById("importFile").addEventListener("change", async e => {
     if (s.v !== 1 || !s.start || !VER[s.gender]) throw 0;
     if (!confirm("지금 기록을 백업 파일 내용으로 바꿀까요?")) return;
     const keep = S && { pid: S.pid, party: S.party };
-    S = s; if (keep) Object.assign(S, keep); C = null; refresh(false); render();
+    S = s; if (keep) Object.assign(S, keep); if (OLD_TITLES[S.title]) S.title = OLD_TITLES[S.title]; C = null; refresh(false); render();
   } catch (err) { alert("백업 파일을 읽지 못했습니다."); }
 });
 function resetAll() {
@@ -932,13 +936,13 @@ function onPartyUpdate() {
   for (const [from, c] of Object.entries(me.cheers || {})) {
     if (!c || !(c.at > (S.seenCheer[from] || 0))) continue;
     S.seenCheer[from] = c.at; S.cheerGot = (S.cheerGot || 0) + 1;
-    queue.push({ big: c.e || "📣", title: "파티 알림", body: `${c.name}님이 응원을 보냈습니다.\n"${c.e} ${c.msg || "힘내!"}"` });
+    queue.push({ big: c.e || "📣", title: "파티 알림", body: `${c.name}님이 응원을 보냈어요.\n"${c.e} ${c.msg || "힘내!"}"` });
   }
   for (const m of Object.values(party.members)) {
     if (m.id === S.pid || !m.today || !m.today.done || m.today.date !== todayStr()) continue;
     if (S.seenClear[m.id] === m.today.date) continue;
     S.seenClear[m.id] = m.today.date;
-    queue.push({ big: "⚔️", title: "파티 알림", body: `${m.name}님이 오늘(Day ${m.day}) ${m.today.rest ? "회복 퀘스트" : "일일 퀘스트"}를 클리어했습니다.${C.D[Math.min(C.T, 66) - 1]?.done ? "\n오늘은 둘 다 클리어!" : "\n나도 질 수 없다."}` });
+    queue.push({ big: "⚔️", title: "파티 알림", body: `${m.name}님이 오늘(Day ${m.day}) ${m.today.rest ? "회복 퀘스트" : "퀘스트"}를 끝냈어요.${C.D[Math.min(C.T, 66) - 1]?.done ? "\n오늘은 둘 다 클리어!" : "\n나도 해 볼까요?"}` });
   }
   refresh();
   // 입력 중일 땐 화면을 다시 그리지 않는다 (글자가 지워지지 않게)
@@ -949,7 +953,7 @@ function snapshot() {
   const T = Math.min(C.T, 66), x = C.D[T - 1], list = ACH();
   const th = THEMES.find(t => t.id === S.theme) || THEMES[0];
   return {
-    id: S.pid, name: S.name, gender: S.gender, title: S.title || "각성자", acc: th.acc,
+    id: S.pid, name: S.name, gender: S.gender, title: S.title || "새내기", acc: th.acc,
     level: C.level, rem: C.rem, need: C.nextNeed, power: C.power, rank: RANKS[rankIdx(T)].id, day: C.T, cycle: S.cycle || 1,
     run: C.run, best: C.best.len, done: C.doneCount, stats: C.stats, sleep: Math.round(C.sleepAvg * 10) / 10,
     shadows: RANKS.filter(r => S.ach["boss_" + r.id]).length,
@@ -990,7 +994,7 @@ function leaveParty(silent) {
   S.party = null; partySel = null; save(); render();
 }
 async function shareParty() {
-  const url = partyLink(), text = `${S.name}님의 66일 레벨업 파티 초대 ⚔️ 같이 강해지자!`;
+  const url = partyLink(), text = `${S.name}님님이 66일 레벨업에 초대했어요. 같이 해요!`;
   try { if (navigator.share) { await navigator.share({ title: "66일 레벨업 파티", text, url }); return; } } catch (e) { return; /* 공유 창을 닫음 */ }
   try { await navigator.clipboard.writeText(url); alert("초대 링크를 복사했어요. 카톡에 붙여 넣어 보내세요."); }
   catch (e) { prompt("이 링크를 복사해서 보내세요", url); }
@@ -998,7 +1002,7 @@ async function shareParty() {
 function cheer(id, e, msg) {
   if (!party.col) return;
   party.fs.updateDoc(party.fs.doc(party.col, id), { [`cheers.${S.pid}`]: { name: S.name, e, msg, at: Date.now() } })
-    .then(() => { S.cheerSent = (S.cheerSent || 0) + 1; refresh(); queue.push({ big: e, title: "응원 전송", body: `${party.members[id]?.name || "파티원"}님에게 "${msg}"를 보냈습니다.` }); pump(); })
+    .then(() => { S.cheerSent = (S.cheerSent || 0) + 1; refresh(); queue.push({ big: e, title: "응원 전송", body: `${party.members[id]?.name || "파티원"}님에게 "${msg}"를 보냈어요.` }); pump(); })
     .catch(onPartyError);
 }
 function partyAlert() {
@@ -1063,13 +1067,13 @@ function mateDetail(m) {
       <div class="small muted">「${esc(m.title)}」 · ${m.gender === "f" ? "여자" : "남자"} 버전${m.cycle > 1 ? ` · ${m.cycle}회차` : ""}</div>
       <div class="bar" style="margin-top:6px"><i style="width:${m.rem / m.need * 100}%"></i></div></div></div>
     <div class="kv" style="margin-top:12px"><div><b>${m.power}</b><span>전투력</span></div><div><b>${m.run}</b><span>연속(최장 ${m.best})</span></div><div><b>${m.done}</b><span>클리어한 날</span></div>
-      <div><b>${m.ach}</b><span>업적</span></div><div><b>${m.shadows}/6</b><span>그림자</span></div><div><b>${m.sleep || "-"}</b><span>평균 수면(h)</span></div></div>
+      <div><b>${m.ach}</b><span>업적</span></div><div><b>${m.shadows}/6</b><span>동료 카드</span></div><div><b>${m.sleep || "-"}</b><span>평균 수면(h)</span></div></div>
     ${radar(m.stats, base)}</div>`;
   h += `<div class="win"><div class="win-h"><span>오늘의 퀘스트</span></div>`;
   if (!live) h += `<p class="muted small" style="margin:0">오늘(${todayStr()}) 아직 기록이 없어요.</p>`;
   else {
     if (t.rest) h += `<div class="banner rest">🛌 회복의 날</div>`;
-    if (t.pen) h += `<div class="banner bad">⚠️ 패널티 진행 중</div>`;
+    if (t.pen) h += `<div class="banner bad">⚠️ 보충 운동 있음</div>`;
     if (t.fat) h += `<p class="small muted" style="margin-top:0">피로도 ${t.fat}/5${t.dl ? " · 디로드 모드" : ""}</p>`;
     h += t.items.map(x => `<div class="between small" style="padding:5px 0;border-bottom:1px dashed var(--line)"><span>${x.i} ${esc(x.n)}</span><span class="${x.v >= x.t ? "up" : ""}">${fmt(x.v)} / ${fmt(x.t)}${esc(x.u)}</span></div>`).join("");
     if (t.note) h += `<p class="small" style="margin-bottom:0">✍️ ${esc(t.note)}</p>`;
@@ -1077,7 +1081,7 @@ function mateDetail(m) {
   }
   h += `</div>`;
   if (!isMe) h += `<div class="win"><div class="win-h"><span>응원 보내기</span></div><div class="cheers">
-    ${[["🔥", "오늘도 불태워!"], ["💪", "할 수 있어!"], ["👏", "멋지다!"], ["🛌", "푹 쉬어!"], ["❤️", "사랑해"]].map(([e, msg]) => `<button onclick="cheer('${m.id}','${e}','${msg}')">${e} ${msg}</button>`).join("")}</div></div>`;
+    ${[["🔥", "오늘도 화이팅"], ["💪", "할 수 있어"], ["👏", "대단해"], ["🛌", "푹 쉬어"], ["❤️", "고생했어"]].map(([e, msg]) => `<button onclick="cheer('${m.id}','${e}','${msg}')">${e} ${msg}</button>`).join("")}</div></div>`;
   h += `<div class="win"><div class="win-h"><span>66일 지도</span></div><div class="mini" style="grid-template-columns:repeat(11,1fr);gap:4px">${[...(m.map || "")].map(c => `<i class="${c}"></i>`).join("")}</div></div>`;
   if (m.growth && m.growth.length) h += `<div class="win"><div class="win-h"><span>측정 성장</span></div>${m.growth.map(g => `<div class="between small" style="padding:4px 0"><span>${esc(g.n)}</span><b class="${g.p >= 0 ? "up" : "down"}">${g.p > 0 ? "+" : ""}${g.p}%</b></div>`).join("")}</div>`;
   h += `<div class="win"><div class="win-h"><span>최근 업적</span></div>${(m.recent || []).map(a => `<div class="ach got"><div class="ai">${a.i}</div><div><div class="an">${esc(a.n)}</div><div class="ev">${esc(a.ev)}</div></div></div>`).join("") || '<p class="muted small">아직 없음</p>'}</div>`;
@@ -1093,9 +1097,9 @@ if (S) {
   const T = C.T, y = C.D[T - 2];
   if (T <= 66 && y && !y.ok && !S.seen["pen" + T]) {
     S.seen["pen" + T] = 1; save();
-    queue.push({ big: "⚠️", title: "경고", body: `Day ${T - 1} 일일 퀘스트를 완료하지 않았습니다.\n오늘 패널티 퀘스트가 추가됩니다.\n(어제 기록은 오늘까지 고칠 수 있어요)` });
+    queue.push({ big: "⚠️", title: "어제 기록이 없어요", body: `Day ${T - 1} 퀘스트를 못 채웠어요.\n오늘은 보충 운동이 하나 붙어요.\n(어제 기록은 오늘까지 고칠 수 있어요)` });
   }
-  if (T <= 66 && isRest(T) && !S.seen["rest" + T]) { S.seen["rest" + T] = 1; save(); queue.push({ big: "🛌", title: "회복의 날", body: "오늘은 쉬면서 강해지는 날입니다.\n스트레칭, 산책, 충분한 수면이 오늘의 퀘스트예요." }); }
+  if (T <= 66 && isRest(T) && !S.seen["rest" + T]) { S.seen["rest" + T] = 1; save(); queue.push({ big: "🛌", title: "회복의 날", body: "오늘은 쉬는 날이에요.\n스트레칭, 산책, 충분한 수면이 오늘의 퀘스트예요." }); }
   if (T > 66) tab = "quest";
 }
 render(); pump();
