@@ -157,6 +157,22 @@ details { background: var(--surface); border: 1px solid var(--line); border-radi
 details summary { cursor: pointer; font-weight: 500; }
 details[open] summary { margin-bottom: 10px; }
 
+/* 실전 과제 */
+.task-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+.task-head .who { font-family: var(--font-display); font-size: 1.4rem; }
+.badge { font-size: .75rem; font-weight: 700; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 0 10px; }
+.req { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.req > div { display: grid; gap: 6px; align-content: start; min-width: 0; }
+.req ul { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; }
+.req .k { font-size: .75rem; letter-spacing: .1em; font-weight: 700; color: var(--muted); }
+.checklist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.checklist label { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.checklist input { margin-top: .45em; accent-color: var(--accent); }
+.codebox { position: relative; min-width: 0; }
+.codebox pre { padding-right: 64px; }
+.copy-btn { position: absolute; top: 8px; right: 8px; font: inherit; font-size: .75rem; padding: 2px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); cursor: pointer; }
+@media (max-width: 640px) { .req { grid-template-columns: minmax(0, 1fr); } }
+
 .kbd { font-family: var(--font-mono); font-size: .82rem; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 6px; background: var(--surface); white-space: nowrap; }
 
 footer { border-top: 1px solid var(--line); color: var(--muted); font-size: .85rem; }
@@ -194,6 +210,7 @@ footer .wrap { padding-block: 24px 40px; }
       <span><b>15분</b> 깃허브 이해하기</span>
       <span><b>15분</b> 상시 운영(서버·DB)</span>
       <span><b>20분</b> 함께 만들어보기</span>
+      <span><b>40분</b> 실전 과제: 예배순서 · 점심 순번 앱</span>
     </div>
   </div>
 </header>
@@ -207,6 +224,7 @@ footer .wrap { padding-block: 24px 40px; }
       <li><a href="#github">깃허브란?</a></li>
       <li><a href="#server">상시 운영 서버</a></li>
       <li><a href="#practice">함께 해보기</a></li>
+      <li><a href="#assignment">실전 과제</a></li>
       <li><a href="#tips">잘 시키는 법</a></li>
       <li><a href="#cheat">치트시트</a></li>
     </ol>
@@ -514,9 +532,163 @@ footer .wrap { padding-block: 24px 40px; }
     </section>
 
     <!-- 07 -->
-    <section id="tips">
+    <section id="assignment">
       <div class="sec-head">
         <span class="sec-num">07</span>
+        <h2>실전 과제: 우리 팀에 진짜 필요한 앱 두 개</h2>
+        <p>오늘 배운 것을 전부 써서 실제로 쓸 앱을 만듭니다. 2~3명이 한 조가 되어 둘 중 하나를 고르세요. 코드는 한 줄도 직접 쓰지 않고, <b>클로드 코드에게 요청만</b> 합니다.</p>
+      </div>
+
+      <div class="easy">
+        <span class="label">공통 조건</span>
+        <ul>
+          <li><b>위치</b> 팀 저장소에 폴더 하나: 예배는 <code>worship/</code>, 점심은 <code>lunch/</code></li>
+          <li><b>화면</b> HTML 파일 하나, 휴대폰에서 먼저 보기 좋게. 깃허브 페이지로 배포</li>
+          <li><b>데이터</b> 기존 Firebase 프로젝트의 Firestore에 저장 (<code>level-up/firebase-config.js</code>와 같은 설정 재사용)</li>
+          <li><b>팀 구분</b> 처음 열 때 <b>팀 코드</b>를 입력하고, 같은 코드를 쓴 사람끼리 같은 기록을 봄</li>
+          <li><b>제출</b> main에 바로 올리지 않고 PR로. 다른 조가 리뷰한 뒤 머지</li>
+        </ul>
+      </div>
+
+      <!-- 과제 A -->
+      <article class="duo" style="grid-template-columns:minmax(0,1fr)">
+        <div style="display:grid;gap:16px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:20px">
+          <div class="task-head"><span class="who">과제 A · 예배순서 기록앱</span><span class="badge">worship/</span></div>
+          <p>매주 예배의 순서와 담당자를 기록하고, 지난 기록을 쉽게 찾고, 단톡방에 바로 공유합니다.</p>
+          <div class="req">
+            <div>
+              <span class="k">필수 기능</span>
+              <ul>
+                <li>날짜별 예배 등록. 기본 순서: 사회, 대표기도, 찬양, 성경봉독, 말씀, 봉헌, 광고, 축도</li>
+                <li>순서 항목 추가·삭제·위아래 이동, 항목마다 담당자와 메모(찬양곡, 본문 등)</li>
+                <li>"지난주 순서 불러오기"로 복사해서 시작</li>
+                <li>지난 예배 목록과 검색(이름, 찬양곡, 본문)</li>
+                <li>"카톡용 복사" 버튼: 순서를 보기 좋은 텍스트로 클립보드에 복사</li>
+              </ul>
+            </div>
+            <div>
+              <span class="k">도전 기능</span>
+              <ul>
+                <li>담당자별 맡은 횟수 통계(최근 3개월)</li>
+                <li>대표기도 순번표를 등록하면 다음 주 담당자 자동 제안</li>
+                <li>한 사람이 같은 날 두 순서를 맡으면 경고</li>
+              </ul>
+            </div>
+          </div>
+          <span class="k caption">데이터 구조(제안)</span>
+<pre><code>worship/{팀코드}/services/{2026-11-01}
+  date: "2026-11-01"
+  title: "주일 오전 예배"
+  items: [ { part: "대표기도", person: "김○○", note: "" }, ... ]
+  updatedAt, updatedBy</code></pre>
+        </div>
+      </article>
+
+      <!-- 과제 B -->
+      <article class="duo" style="grid-template-columns:minmax(0,1fr)">
+        <div style="display:grid;gap:16px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:20px">
+          <div class="task-head"><span class="who">과제 B · 점심 메뉴 순번·이력 앱</span><span class="badge">lunch/</span></div>
+          <p>점심 메뉴 고르는 사람을 공평하게 돌아가며 정하고, 누가 언제 무엇을 골랐는지 남깁니다.</p>
+          <div class="req">
+            <div>
+              <span class="k">필수 기능</span>
+              <ul>
+                <li>팀원 명단 관리와 순서 정하기(위아래 이동)</li>
+                <li>첫 화면에 "오늘 고를 사람"과 "다음 차례" 크게 표시</li>
+                <li>메뉴·식당을 기록하면 자동으로 다음 사람 차례로 넘어감</li>
+                <li>휴가·외근이면 "건너뛰기"(다음 바퀴에 우선), 서로 순서 바꾸기</li>
+                <li>이력 목록: 날짜, 고른 사람, 메뉴, 식당, 한줄평</li>
+              </ul>
+            </div>
+            <div>
+              <span class="k">도전 기능</span>
+              <ul>
+                <li>최근 2주 안에 같은 메뉴를 고르면 "또 먹어요?" 경고</li>
+                <li>식당 별점과 자주 간 식당 순위</li>
+                <li>고민될 때 지난 이력에서 메뉴 랜덤 추천</li>
+              </ul>
+            </div>
+          </div>
+          <span class="k caption">데이터 구조(제안)</span>
+<pre><code>lunch/{팀코드}                     ← 순번 상태 문서
+  members: ["김○○", "이○○", "박○○"]
+  nextIndex: 1
+  skipped: ["이○○"]
+lunch/{팀코드}/logs/{자동ID}       ← 이력 한 건
+  date, picker, menu, place, memo, rating</code></pre>
+        </div>
+      </article>
+
+      <h3>진행 순서와 요청문</h3>
+      <p class="caption">아래 요청문을 복사해 클로드 코드(claude.ai/code, 팀 저장소 선택)에 그대로 붙여넣고, [ ] 부분만 고르세요.</p>
+      <div class="steps">
+        <div class="step"><div>
+          <b>플랜 모드로 계획부터 받기 (5분)</b>
+          <p><span class="kbd">Shift</span>+<span class="kbd">Tab</span>으로 플랜 모드를 켠 뒤 요청합니다. 계획을 읽고 빠진 기능이 있으면 말로 고쳐달라고 한 다음 승인합니다.</p>
+<pre><code>[예배순서 기록앱 / 점심 메뉴 순번·이력 앱]을 [worship/ / lunch/] 폴더에 만들고 싶어.
+교육 자료 claude-guide/index.html 의 '실전 과제' 섹션에 적힌
+필수 기능과 데이터 구조를 따라줘.
+- HTML 파일 하나, 한국어, 휴대폰 화면 우선
+- 저장은 level-up/index.html 이 Firebase에 연결하는 방식을 그대로 참고하고
+  firebase-config.js 설정을 재사용해줘
+- 처음 열면 팀 코드를 입력받아서 그 코드로 데이터를 나눠줘
+먼저 화면 구성과 작업 순서를 계획으로 보여줘.</code></pre>
+        </div></div>
+        <div class="step"><div>
+          <b>화면부터 만들고 눈으로 확인 (15분)</b>
+          <p>처음엔 Firebase 없이 이 기기에만 저장되게 만들면 빨리 확인할 수 있습니다.</p>
+<pre><code>우선 Firebase 연결 없이 브라우저에만 저장되게 화면부터 만들어줘.
+예시 데이터 3건을 넣어서 보여주고, 400px 폭에서 깨지지 않는지 확인해줘.</code></pre>
+        </div></div>
+        <div class="step"><div>
+          <b>Firebase 연결로 팀 공유 (10분)</b>
+<pre><code>이제 Firestore에 저장해서 같은 팀 코드를 쓴 사람끼리 실시간으로 같이 보게 해줘.
+인터넷이 끊겨도 화면은 열리고, 다시 연결되면 저장되게 해줘.
+데이터 경로는 실전 과제의 데이터 구조대로.</code></pre>
+        </div></div>
+        <div class="step"><div>
+          <b>PR 올리고 다른 조가 리뷰 (10분)</b>
+<pre><code>다 됐으면 README.md에 사용법을 짧게 쓰고 PR로 올려줘.
+PR 설명에는 만든 기능 목록과 확인 방법을 적어줘.</code></pre>
+          <p>다른 조 PR을 열어 휴대폰으로 직접 써보고, 불편한 점을 PR 댓글로 남깁니다. 작성 조는 그 댓글을 클로드에게 그대로 전달해 고치게 합니다.</p>
+        </div></div>
+      </div>
+
+      <div class="caution">
+        <span class="label">관리자가 먼저 할 일: Firestore 보안 규칙</span>
+        <p>새 앱은 <code>worship</code>, <code>lunch</code>라는 새 경로에 저장하므로, Firebase 콘솔 → Firestore → <b>규칙</b>에 아래 두 블록을 <b>추가</b>해야 저장이 됩니다. 기존 규칙(가계부·여행 지도·레벨업)은 지우지 말고 그대로 두세요.</p>
+<pre><code>// 기존 match /databases/{database}/documents { ... } 안에 추가
+match /worship/{team}/{rest=**} {
+  allow read, write: if team.size() >= 6;
+}
+match /worship/{team} {
+  allow read, write: if team.size() >= 6;
+}
+match /lunch/{team}/{rest=**} {
+  allow read, write: if team.size() >= 6;
+}
+match /lunch/{team} {
+  allow read, write: if team.size() >= 6;
+}</code></pre>
+        <p>교육용 최소 규칙입니다. 팀 코드를 아는 사람은 누구나 읽고 쓸 수 있으니 코드는 6자 이상, 추측하기 어렵게 정하세요. 실제 운영 전에는 구글 로그인을 붙여 팀원만 쓰도록 바꾸는 것을 권합니다.</p>
+      </div>
+
+      <div>
+        <h3 style="margin-bottom:10px">완료 기준 체크리스트</h3>
+        <ul class="checklist">
+          <li><label><input type="checkbox" id="done-1"> 휴대폰 두 대에서 같은 팀 코드로 열었을 때 같은 기록이 보인다</label></li>
+          <li><label><input type="checkbox" id="done-2"> 한쪽에서 입력하면 다른 쪽에 새로고침 없이 나타난다</label></li>
+          <li><label><input type="checkbox" id="done-3"> 필수 기능을 전부 직접 눌러봤다</label></li>
+          <li><label><input type="checkbox" id="done-4"> 저장소에 비밀번호나 개인 연락처가 올라가지 않았다</label></li>
+          <li><label><input type="checkbox" id="done-5"> PR이 리뷰를 받고 머지되어 깃허브 페이지 주소로 열린다</label></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 08 -->
+    <section id="tips">
+      <div class="sec-head">
+        <span class="sec-num">08</span>
         <h2>잘 시키는 법</h2>
         <p>클로드는 똑똑하지만 우리 팀 사정은 모릅니다. 사람에게 일을 맡기듯 배경을 알려주세요.</p>
       </div>
@@ -563,10 +735,10 @@ footer .wrap { padding-block: 24px 40px; }
       </div>
     </section>
 
-    <!-- 08 -->
+    <!-- 09 -->
     <section id="cheat">
       <div class="sec-head">
-        <span class="sec-num">08</span>
+        <span class="sec-num">09</span>
         <h2>클로드 코드 치트시트</h2>
         <p>입력창에 <code>/</code>를 치면 목록이 뜹니다. 처음엔 이것만 알아도 충분합니다.</p>
       </div>
@@ -636,6 +808,7 @@ footer .wrap { padding-block: 24px 40px; }
     ["서버", "Server", "서버", "24시간 켜져 있으면서 요청에 응답하는 컴퓨터.", ""],
     ["데이터베이스", "Database · DB", "서버", "데이터를 정리해 저장하는 곳. 여러 사람이 동시에 쓰는 공용 엑셀.", ""],
     ["Firebase · Firestore", "Firebase", "서버", "구글의 앱용 서비스 모음. Firestore는 그 안의 데이터베이스. 서버 관리 없이 저장·동기화.", "level-up 앱의 기기 간 동기화"],
+    ["보안 규칙", "Security Rules", "서버", "Firestore에서 누가 어떤 데이터를 읽고 쓸 수 있는지 정하는 규칙. 데이터베이스의 출입 명부.", "worship, lunch 경로만 새로 허용"],
     ["Google Cloud", "GCP", "서버", "구글의 클라우드 서비스 전체. 서버 실행(Cloud Run), 예약 실행(Scheduler) 등.", ""],
     ["API · API 키", "API key", "서버", "API는 프로그램끼리 대화하는 창구, API 키는 그 창구의 출입증. 남에게 보이면 안 됨.", "환경 변수·시크릿에 보관"],
     ["환경 변수 · 시크릿", "Env var · Secret", "서버", "코드 밖에 따로 보관하는 설정값. 비밀번호를 코드에 적지 않기 위해 사용.", ""]
@@ -676,6 +849,29 @@ footer .wrap { padding-block: 24px 40px; }
       chips.forEach(function (o) { o.setAttribute("aria-pressed", o === c ? "true" : "false"); });
       filter();
     });
+  });
+
+  // 코드 블록 복사 버튼
+  document.querySelectorAll("main pre").forEach(function (pre) {
+    var wrap = document.createElement("div");
+    wrap.className = "codebox";
+    pre.parentNode.insertBefore(wrap, pre);
+    wrap.appendChild(pre);
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "copy-btn";
+    btn.textContent = "복사";
+    btn.addEventListener("click", function () {
+      var text = pre.innerText;
+      function done() { btn.textContent = "복사됨"; setTimeout(function () { btn.textContent = "복사"; }, 1500); }
+      function fallback() {
+        var r = document.createRange(); r.selectNodeContents(pre);
+        var s = getSelection(); s.removeAllRanges(); s.addRange(r);
+        btn.textContent = "선택됨";
+      }
+      try { navigator.clipboard.writeText(text).then(done, fallback); } catch (e) { fallback(); }
+    });
+    wrap.appendChild(btn);
   });
 
   // 테마 전환
