@@ -1,0 +1,16 @@
+{
+  "name": "66일 레벨업",
+  "short_name": "66일 레벨업",
+  "description": "E랭크에서 S랭크까지, 66일 동안 일일 퀘스트를 깨며 성장하는 게임형 습관 트래커",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#070b14",
+  "theme_color": "#070b14",
+  "lang": "ko",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
