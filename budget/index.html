@@ -534,6 +534,9 @@
     let room = new URLSearchParams(location.search).get("room") || storageGet(ROOM_KEY);
     if (room && !/^[a-z0-9]{20}$/.test(room)) room = null;
     if (room) storageSet(ROOM_KEY, room);
+    // 주소에 공유 코드를 남겨 둡니다. 아이폰 “홈 화면에 추가”는 이 주소로 앱을 만들고,
+    // 홈 화면 앱은 사파리와 저장 공간이 따로라 주소에 코드가 있어야 같은 가계부로 열려요.
+    if (room && new URLSearchParams(location.search).get("room") !== room) history.replaceState(null, "", `?room=${room}`);
 
     function cacheKey() {
       return room ? `${STORE_KEY}:room:${room}` : STORE_KEY;
