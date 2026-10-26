@@ -337,7 +337,14 @@ const OLD_TITLES = {
   "최고의 파티": "듀오 큐", "환상의 짝꿍": "듀오 큐", "운명 공동체": "평생 파티", "30일 함께": "평생 파티"
 };
 if (S && OLD_TITLES[S.title]) S.title = OLD_TITLES[S.title];
-function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* 저장 실패해도 화면은 계속 */ } }
+// 기기 간 동기화 기준 시각. 앱을 열기만 한 기기가 다른 기기의 최신 기록을 덮어쓰지 않도록, 직접 바꾼 기록이 달라졌을 때만 올린다
+const userKey = () => S ? JSON.stringify([S.name, S.gender, S.start, S.cycle, S.days, S.evals, S.alloc, S.shields, S.custom, S.title, S.theme, S.job, S.bank]) : "";
+let lastUserKey = userKey();
+function save() {
+  const k = userKey();
+  if (k !== lastUserKey) { S.savedAt = Date.now(); lastUserKey = k; }
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* 저장 실패해도 화면은 계속 */ }
+}
 function fresh(name, gender, start) {
   return { v: 1, name, gender, start, cycle: 1, days: {}, alloc: { str: 0, vit: 0, agi: 0, int: 0, per: 0 },
     bank: { xp: 0, st: { str: 0, vit: 0, agi: 0, int: 0, per: 0 } }, ach: {}, title: null, theme: VER[gender].theme,
@@ -623,7 +630,7 @@ function header() {
 function onboarding() {
   const g = window._g || "m";
   const list = k => VER[k].main.map(q => `<li>${q.name} ${fmt(q.a)} → ${fmt(q.b)}${q.unit}</li>`).join("");
-  return `<div class="win" style="margin-top:20px"><div class="win-h"><span>NEW GAME</span></div>
+  const neu = `<div class="win" style="margin-top:20px"><div class="win-h"><span>NEW GAME</span></div>
     <p style="text-align:center;font-weight:700;font-size:17px;margin:0">⚔️ 66일 레벨업</p>
     <p class="muted small" style="text-align:center">E랭크에서 S랭크까지 66일. 매일 <b>숙제</b>하고, 장비 줍고, 랭크마다 <b>레이드 보스</b>를 잡아요.<br>
     일주일에 한 번은 <b style="color:var(--rest)">여관</b>에서 쉬고, Day 8엔 <b style="color:var(--gold)">전직</b>이 기다립니다.</p>
@@ -634,7 +641,13 @@ function onboarding() {
       <b>${VER[k].icon} ${VER[k].label}</b><div class="small muted">${VER[k].desc}</div><ul>${list(k)}</ul></button>`).join("")}</div>
     <label class="f">시작일 (Day 1)</label><input type="date" id="ob-start" value="${todayStr()}" max="${todayStr()}">
     <button class="btn" style="width:100%;margin-top:16px" onclick="accept()">시작하기</button>
-    <p class="muted small" style="text-align:center;margin:10px 0 0">기록은 이 기기의 브라우저에만 저장됩니다. 상태창에서 백업할 수 있어요.</p></div>`;
+    <p class="muted small" style="text-align:center;margin:10px 0 0">기록은 이 기기에 저장되고, 파티에 들어가면 다른 기기와도 맞춰져요.</p></div>`;
+  const cont = `<div class="win" style="margin-top:20px"><div class="win-h"><span>CONTINUE</span></div>
+    <p style="margin-top:0"><b>📲 다른 곳에서 하던 캐릭터가 있나요?</b></p>
+    <p class="muted small">${standalone ? "아이폰 홈 화면 앱은 사파리와 저장 공간이 따로라서 처음엔 비어 있어요. " : ""}파티 초대 링크(또는 파티 탭의 코드)를 붙여 넣으면 내 캐릭터를 그대로 불러와요.</p>
+    ${restoreBox()}</div>`;
+  // 홈 화면 앱으로 처음 열었다면 이어하기가 먼저
+  return standalone ? cont + neu : neu + cont;
 }
 function accept() {
   const name = document.getElementById("ob-name").value.trim() || "플레이어";
@@ -990,28 +1003,49 @@ function mates(D) {
 function partyLink() { return `${location.origin}${location.pathname}?party=${S.party}`; }
 function setPartyStatus(st) { party.status = st; if (tab === "party") render(); }
 
-async function connectParty() {
-  if (!S || !S.party) return;
+async function partyCol(code) {
   let config = null;
   try { config = (await import("./firebase-config.js")).default; } catch (e) { /* 설정 파일이 없으면 공유 없이 */ }
-  if (!config) return setPartyStatus("nocfg");
+  if (!config) return null;
+  const [{ initializeApp, getApps }, fs] = await Promise.all([import(`${FIREBASE_SDK}/firebase-app.js`), import(`${FIREBASE_SDK}/firebase-firestore.js`)]);
+  const app = getApps()[0] || initializeApp(config);
+  party.fs = fs;
+  return fs.collection(fs.getFirestore(app), "levelups", code, "players");
+}
+async function connectParty() {
+  if (!S || !S.party) return;
   setPartyStatus("wait");
   try {
-    const [{ initializeApp, getApps }, fs] = await Promise.all([import(`${FIREBASE_SDK}/firebase-app.js`), import(`${FIREBASE_SDK}/firebase-firestore.js`)]);
-    const app = getApps()[0] || initializeApp(config);
-    party.fs = fs;
-    party.col = fs.collection(fs.getFirestore(app), "levelups", S.party, "players");
+    const col = await partyCol(S.party);
+    if (!col) return setPartyStatus("nocfg");
+    party.col = col;
     if (party.unsub) party.unsub();
-    party.unsub = fs.onSnapshot(party.col, qs => {
+    party.synced = false; party.sent = "";
+    party.unsub = party.fs.onSnapshot(party.col, qs => {
       const members = {};
       qs.forEach(d => { members[d.id] = d.data(); });
       party.members = members;
+      // 같은 캐릭터를 다른 기기에서 더 최근에 고쳤으면 그 기록으로 맞춘다
+      const mine = members[S.pid];
+      if (mine && mine.save && (mine.savedAt || 0) > (S.savedAt || 0)) adoptSave(mine.save, S.party);
+      const first = !party.synced;
+      party.synced = true;
       onPartyUpdate();
       setPartyStatus("live");
+      if (first) publishSoon(0);
     }, onPartyError);
-    party.sent = "";
-    publishSoon(0);
   } catch (e) { onPartyError(e); }
+}
+function adoptSave(json, code) {
+  let s;
+  try { s = JSON.parse(json); } catch (e) { return false; }
+  if (!s || s.v !== 1 || !VER[s.gender]) return false;
+  S = s; S.party = code;
+  if (OLD_TITLES[S.title]) S.title = OLD_TITLES[S.title];
+  lastUserKey = userKey();
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* 무시 */ }
+  C = null; viewDay = null; refresh(false);
+  return true;
 }
 function onPartyError(e) {
   console.error(e);
@@ -1052,13 +1086,16 @@ function snapshot() {
     cleared: C.D.filter(y => y.done).map(y => y.date),
     ach: Object.keys(S.ach).length,
     recent: Object.entries(S.ach).sort((a, b) => b[1].at - a[1].at).slice(0, 6).map(([id, v]) => { const a = list.find(a => a.id === id); return { n: a ? a.name : id, i: a ? a.icon : "🏆", ev: v.ev, at: v.at }; }),
-    growth: C.ev.filter(e => e.rows.length > 1).map(e => ({ n: e.e.name, p: Math.round(e.pct) }))
+    growth: C.ev.filter(e => e.rows.length > 1).map(e => ({ n: e.e.name, p: Math.round(e.pct) })),
+    save: JSON.stringify(S), savedAt: S.savedAt || 0
   };
 }
 function publishSoon(delay = 1200) {
-  if (!S || !S.party || !party.col) return;
+  if (!S || !S.party || !party.col || !party.synced) return;
   clearTimeout(party.timer);
   party.timer = setTimeout(() => {
+    const remote = party.members[S.pid];
+    if (remote && (remote.savedAt || 0) > (S.savedAt || 0)) return;
     const snap = snapshot(), key = JSON.stringify(snap);
     if (key === party.sent) return;
     party.sent = key;
@@ -1079,7 +1116,7 @@ function leaveParty(silent) {
   if (!silent && !confirm("파티에서 나갈까요? 파티원 목록에서 내 정보가 지워집니다. (내 기록은 그대로)")) return;
   if (party.unsub) party.unsub();
   if (party.col) party.fs.deleteDoc(party.fs.doc(party.col, S.pid)).catch(() => { /* 오프라인이면 남을 수 있음 */ });
-  Object.assign(party, { col: null, unsub: null, members: {}, status: "off", sent: "" });
+  Object.assign(party, { col: null, unsub: null, members: {}, status: "off", sent: "", synced: false });
   S.party = null; partySel = null; save(); render();
 }
 async function shareParty() {
@@ -1099,14 +1136,66 @@ function partyAlert() {
 }
 const ago = t => { const s = (Date.now() - t) / 1000; return s < 60 ? "방금" : s < 3600 ? `${Math.floor(s / 60)}분 전` : s < 86400 ? `${Math.floor(s / 3600)}시간 전` : `${Math.floor(s / 86400)}일 전`; };
 
+// --- 다른 기기에서 하던 캐릭터 불러오기 ---
+let rs = null;
+const standalone = !!(navigator.standalone || (window.matchMedia && matchMedia("(display-mode: standalone)").matches));
+async function restoreLookup() {
+  const v = document.getElementById("rcode").value;
+  const code = (String(v).match(/party=([a-z0-9]+)/) || [null, String(v).trim()])[1];
+  if (!/^[a-z0-9]{20}$/.test(code)) { rs = { code: v, err: "파티 링크나 20자리 코드를 그대로 붙여 넣어 주세요." }; render(); return; }
+  rs = { code, wait: true }; render();
+  try {
+    const col = await partyCol(code);
+    if (!col) { rs = { code, err: "Firebase 설정 파일이 없어요." }; render(); return; }
+    let un = null, got = false;
+    un = party.fs.onSnapshot(col, qs => {
+      if (got) return;
+      got = true;
+      const list = [];
+      qs.forEach(d => list.push({ id: d.id, ...d.data() }));
+      rs = { code, list: list.filter(m => m.name) };
+      render();
+      setTimeout(() => un && un(), 0);
+    }, e => { rs = { code, err: e && e.code === "permission-denied" ? "Firebase 규칙 확인이 필요해요." : "연결하지 못했어요. 인터넷을 확인해 주세요." }; render(); });
+  } catch (e) { rs = { code, err: "연결하지 못했어요. 인터넷을 확인해 주세요." }; render(); }
+}
+function restorePick(id) {
+  const m = (rs && rs.list || []).find(x => x.id === id);
+  if (!m || !m.save) return;
+  if (S && !confirm(`이 기기의 지금 캐릭터(${S.name})를 '${m.name}' 캐릭터로 바꿀까요?`)) return;
+  // 이 기기에서 새로 만든 캐릭터가 같은 파티에 있었다면 지운다 (중복 방지)
+  if (S && S.party === rs.code && S.pid !== id && party.col) party.fs.deleteDoc(party.fs.doc(party.col, S.pid)).catch(() => { /* 무시 */ });
+  const code = rs.code;
+  if (party.unsub) party.unsub();
+  Object.assign(party, { col: null, unsub: null, members: {}, status: "off", sent: "", synced: false });
+  if (!adoptSave(m.save, code)) { alert("기록을 읽지 못했어요."); return; }
+  rs = null; invite = null; tab = "quest";
+  queue.push({ big: "📲", title: "이어하기 완료!", body: `${S.name} · Lv.${C.level} · Day ${Math.min(C.T, 66)}\n이제 이 기기와 다른 기기의 기록이 파티를 통해 자동으로 맞춰져요.` });
+  render(); pump();
+  connectParty();
+}
+function restoreBox() {
+  let h = `<div class="row"><input id="rcode" placeholder="파티 초대 링크 또는 코드" value="${esc(rs && rs.code || invite || "")}" style="flex:1;min-width:0"><button class="btn" onclick="restoreLookup()">찾기</button></div>`;
+  if (!rs) return h;
+  if (rs.wait) h += `<p class="small muted">파티를 찾는 중…</p>`;
+  if (rs.err) h += `<p class="small" style="color:var(--bad)">${esc(rs.err)}</p>`;
+  if (rs.list) h += rs.list.length ? `<p class="small muted" style="margin:10px 0 6px">내 캐릭터를 고르세요</p>` + rs.list.map(m => `<button class="btn ghost" style="width:100%;margin-top:6px;text-align:left" onclick="restorePick('${m.id}')" ${m.save ? "" : "disabled"}>
+      <b>${esc(m.name)}</b> · Lv.${m.level} · ${m.gender === "f" ? "여자" : "남자"} 버전 · Day ${Math.min(m.day, 66)}${m.save ? "" : `<br><span class="small muted">아직 동기화 전이에요. 원래 쓰던 사파리에서 앱을 한 번 열어 주세요.</span>`}</button>`).join("")
+    : `<p class="small muted">이 파티에 캐릭터가 없어요.</p>`;
+  return h;
+}
+
 // --- 파티 화면 ---
 function partyView() {
   if (!S.party) return `<div class="win"><div class="win-h"><span>파티</span></div>
     <p style="margin-top:0">아내(남편)·친구와 파티를 맺으면 서로의 <b>레벨, 오늘 퀘스트 진행, 66일 지도, 능력치, 최근 업적, 오늘 드랍한 장비</b>가 실시간으로 보이고 버프(응원)를 걸어 줄 수 있어요. 같은 날 둘 다 숙제를 끝내면 <b>협주 보너스 +20 XP</b>!</p>
-    <p class="muted small">각자 자기 버전(남자/여자)으로 진행합니다. 기록 원본은 각자 휴대폰에 있고, 파티에는 요약만 올라갑니다.</p>
+    <p class="muted small">각자 자기 버전(남자/여자)으로 진행합니다. 파티에는 진행 요약과 기기 간 이어하기용 기록이 올라가요.</p>
     <button class="btn" style="width:100%" onclick="createParty()">⚔️ 파티 만들기</button>
     <hr><label class="f" style="margin-top:0">초대 링크나 20자리 코드로 참여</label>
-    <div class="row"><input id="pcode" placeholder="https://…?party=… 또는 코드" style="flex:1;min-width:0"><button class="btn" onclick="joinParty(document.getElementById('pcode').value)">참여</button></div></div>`;
+    <div class="row"><input id="pcode" placeholder="https://…?party=… 또는 코드" style="flex:1;min-width:0"><button class="btn" onclick="joinParty(document.getElementById('pcode').value)">참여</button></div></div>
+    <div class="win"><div class="win-h"><span>CONTINUE</span></div>
+    <p style="margin-top:0"><b>📲 다른 기기(사파리 등)에서 하던 캐릭터 불러오기</b></p>
+    <p class="muted small">이미 파티에 있던 캐릭터를 이 기기로 가져와요. 새 캐릭터로 참여하려면 위의 '참여'를 쓰세요.</p>${restoreBox()}</div>`;
 
   const st = { off: ["", "연결 안 됨"], wait: ["wait", "연결 중…"], live: ["live", "실시간 연결됨"], error: ["bad", "연결 오류 · 인터넷을 확인해 주세요"],
     denied: ["bad", "Firebase 규칙에 파티(levelups) 허용이 필요해요 (README 참고)"], nocfg: ["bad", "Firebase 설정 파일이 없어요"] }[party.status] || ["", ""];
@@ -1130,6 +1219,7 @@ function partyView() {
     <p class="muted small">받은 사람이 링크를 열면 플레이어 등록 후 자동으로 이 파티에 들어옵니다. 이미 쓰고 있다면 파티 탭에 코드를 넣고 참여하면 돼요.</p></div>`;
   h += `<div class="win"><div class="win-h"><span>초대</span></div>
     <button class="btn" style="width:100%" onclick="shareParty()">🔗 초대 링크 보내기</button>
+    <p class="small muted">📲 다른 기기(아이폰 홈 화면 앱 등)에서도 이어서 하려면: 그 기기에서 앱을 열고 '다른 곳에서 하던 캐릭터' → 이 링크를 붙여 넣기. 기록은 자동으로 맞춰져요.</p>
     <p class="small muted">파티 코드 <span class="code">${S.party}</span><br>링크를 아는 사람은 누구나 파티원 진행 상황을 볼 수 있으니 가족·친구에게만 보내 주세요.</p>
     <button class="btn ghost bad" style="width:100%" onclick="leaveParty()">파티 나가기</button></div>`;
   return h;
