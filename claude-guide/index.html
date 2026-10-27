@@ -148,6 +148,11 @@ tbody th { font-weight: 700; white-space: nowrap; color: var(--muted); font-size
 .flow code { font-size: .72rem; justify-self: start; }
 .flow div:not(:last-child)::after { content: "→"; position: absolute; right: -8px; top: 50%; transform: translate(50%, -50%); color: var(--muted); font-size: .9rem; }
 
+.why { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.why > div { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 6px; align-content: start; }
+.why p { font-size: .92rem; color: var(--muted); }
+@media (max-width: 640px) { .why { grid-template-columns: minmax(0, 1fr); } }
+
 /* 서버 구성도 */
 .arch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
 .arch > div { padding: 18px; display: grid; gap: 6px; align-content: start; border-right: 1px solid var(--line); }
@@ -436,6 +441,20 @@ footer .wrap { padding-block: 24px 40px; }
       <div class="easy">
         <span class="label">쉽게 말하면</span>
         <p><b>구글 드라이브 + 무제한 되돌리기 + 결재 시스템</b>입니다. 누가 언제 무엇을 왜 바꿨는지 전부 남고, 바꾼 내용은 "검토 요청 → 승인 → 반영" 순서를 거칩니다. 클로드 코드는 이 과정을 대신 처리해 줍니다.</p>
+      </div>
+
+      <h3>왜 깃허브를 쓰나요?</h3>
+      <p class="prose">클로드 코드가 만든 결과물을 <b>안전하게 보관하고, 확인하고, 사람들에게 띄워주는 곳</b>이 필요하기 때문입니다.</p>
+      <div class="why">
+        <div><b>1. 작업 공간이 사라지기 때문에</b><p>클라우드의 클로드 코드는 매번 임시 컴퓨터에서 일하고, 끝나면 그 컴퓨터는 없어집니다. 깃허브에 올려야 만든 앱이 남습니다. <b>영구 보관함</b>입니다.</p></div>
+        <div><b>2. 언제든 되돌릴 수 있기 때문에</b><p>AI는 가끔 멀쩡하던 기능을 망가뜨립니다. 모든 변경이 커밋으로 남아서 "어제 버전으로 돌려줘"가 가능합니다.</p></div>
+        <div><b>3. 반영 전에 사람이 확인하기 때문에</b><p>클로드는 원본을 바로 고치지 않고 PR로 올립니다. 무엇이 바뀌는지 보고 승인한 것만 반영됩니다. AI에게 일을 맡길 때의 <b>안전장치</b>입니다.</p></div>
+        <div><b>4. 무료로 웹 주소가 생기기 때문에</b><p>깃허브 페이지를 켜두면 머지된 HTML이 바로 인터넷 주소로 열립니다. 서버 없이 팀원 누구나 휴대폰으로 씁니다.</p></div>
+      </div>
+      <div class="easy">
+        <span class="label">아티팩트로 충분하지 않나요?</span>
+        <p>페이지 하나를 공유하는 거라면 클로드 아티팩트로 충분합니다. 여러 사람이 계속 고쳐 나가는 앱, 클로드 계정이 없는 사람도 쓰는 앱, 홈 화면에 추가해 앱처럼 쓰는 경우라면 깃허브가 맞습니다.</p>
+        <p><b>깃허브는 "결재 기능이 붙은 공유 폴더"</b>, 클로드 코드는 그 폴더에 기안을 올리는 직원입니다. 우리는 보고 승인만 하면 됩니다.</p>
       </div>
 
       <div class="flow" aria-label="깃허브 작업 흐름">
