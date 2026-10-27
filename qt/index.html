@@ -1,0 +1,718 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>아침묵상 나눔 기록</title>
+<meta name="theme-color" content="#2f4a7a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+<style>
+/* Layout: 한 줄 머리말 → 오늘 카드(인도자 + 말씀) → 기록 현황 → 달력 → 실장님과 함께한 날. 새벽빛 청회색 바탕에 해돋이 금빛 하나만 강조 */
+:root{
+  --bg:#f3f5f8; --surface:#ffffff; --sunk:#e8ecf2; --line:#d5dbe5;
+  --fg:#1d2433; --muted:#5b6578; --faint:#8a93a5;
+  --ink:#2f4a7a;      /* 나눈 날 */
+  --ink-soft:#dfe6f3;
+  --gold:#c98a1b;     /* 실장님과 함께 */
+  --gold-soft:#f8ead0;
+  --rest:#a9b1bf;     /* 쉰 날 */
+  --danger:#b4423a;
+  --display:"Gowun Batang", "Nanum Myeongjo", "AppleMyungjo", serif;
+  --body:"IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12161f; --surface:#1a202c; --sunk:#232a38; --line:#2f3848;
+  --fg:#e7ebf2; --muted:#a3adbf; --faint:#768096;
+  --ink:#8fb0ec; --ink-soft:#26334d; --gold:#e8b04a; --gold-soft:#3a2e17;
+  --rest:#5d6678; --danger:#e07a70; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12161f; --surface:#1a202c; --sunk:#232a38; --line:#2f3848;
+  --fg:#e7ebf2; --muted:#a3adbf; --faint:#768096;
+  --ink:#8fb0ec; --ink-soft:#26334d; --gold:#e8b04a; --gold-soft:#3a2e17;
+  --rest:#5d6678; --danger:#e07a70; color-scheme:dark}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{padding-top:env(safe-area-inset-top, 0px);padding-bottom:env(safe-area-inset-bottom, 0px)}
+body{margin:0}
+.app{display:grid;gap:28px}
+.join{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:24px;display:grid;gap:14px;max-width:520px}
+.join form{display:flex;gap:8px}
+.join form input{flex:1;min-width:0}
+.link{background:none;border:0;padding:0;color:var(--ink);text-decoration:underline;font:inherit}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.6}
+.wrap{max-width:980px;margin:0 auto;padding-block:28px 64px;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));
+  display:grid;gap:28px}
+h1,h2,h3{font-family:var(--display);font-weight:700;text-wrap:balance;margin:0}
+h1{font-size:1.75rem;letter-spacing:-.01em}
+h2{font-size:1.2rem}
+.eyebrow{font-size:.74rem;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.muted{color:var(--muted)}
+.num{font-variant-numeric:tabular-nums}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+a{color:var(--ink)}
+
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+header .date{color:var(--muted)}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 14px;font-weight:500}
+.btn:hover{border-color:var(--ink)}
+.btn.primary{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.btn.ghost{background:transparent}
+.btn.danger{color:var(--danger)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.notice{background:var(--sunk);border-radius:8px;padding:10px 14px;color:var(--muted);font-size:.9rem}
+
+/* 오늘 */
+.today{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:0;background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+@media (max-width:760px){.today{grid-template-columns:1fr}}
+.lead{padding:24px;display:grid;gap:14px;align-content:start;background:linear-gradient(180deg,var(--gold-soft),transparent 75%)}
+.lead .who{font-family:var(--display);font-size:2.4rem;line-height:1.15}
+.lead .meta{color:var(--muted);font-size:.9rem}
+.rota{display:flex;gap:6px;flex-wrap:wrap}
+.rota span{font-size:.82rem;padding:3px 10px;border-radius:999px;background:var(--sunk);color:var(--muted)}
+.rota span.on{background:var(--ink);color:var(--bg)}
+.lead .actions{display:flex;gap:8px;flex-wrap:wrap}
+.word{padding:24px;border-left:1px solid var(--line);display:grid;gap:12px;align-content:start;min-width:0}
+@media (max-width:760px){.word{border-left:0;border-top:1px solid var(--line)}}
+.word .ref{font-family:var(--display);font-size:1.35rem}
+.word .ptitle{color:var(--muted)}
+.verses{max-height:340px;overflow:auto;padding-right:6px;font-family:var(--display);font-size:1.02rem;line-height:1.9}
+.verses p{margin:0 0 4px}
+.verses sup{font-family:var(--body);font-size:.7rem;color:var(--gold);font-weight:600;margin-right:4px}
+.word details summary{cursor:pointer;color:var(--muted);font-size:.9rem}
+.word form{display:grid;gap:8px;margin-top:8px}
+
+/* 현황 */
+.stats{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:16px}
+@media (max-width:760px){.stats{grid-template-columns:1fr}}
+.streak{background:var(--ink);color:var(--bg);border-radius:14px;padding:22px;display:grid;gap:4px;align-content:center}
+.streak .big{font-family:var(--display);font-size:3rem;line-height:1}
+.streak .big small{font-size:1.1rem;margin-left:4px}
+.streak .sub{opacity:.85;font-size:.88rem}
+.people{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:6px 20px}
+.person{display:grid;grid-template-columns:minmax(70px,auto) 1fr auto;gap:14px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}
+.person:last-child{border-bottom:0}
+.person .name{font-weight:600}
+.bar{height:8px;background:var(--sunk);border-radius:999px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--ink);border-radius:999px}
+.person .right{text-align:right;font-size:.88rem;color:var(--muted);white-space:nowrap}
+.person .right b{color:var(--fg);font-size:1rem}
+
+/* 달력 */
+.cal{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;display:grid;gap:14px}
+.calhead{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
+.calnav{display:flex;align-items:center;gap:6px}
+.calnav h2{min-width:8.5em;text-align:center}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.84rem;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:14px;height:14px;border-radius:4px;display:inline-block}
+.sw.s{background:var(--ink)} .sw.d{background:var(--gold)} .sw.r{background:repeating-linear-gradient(45deg,var(--rest) 0 3px,transparent 3px 6px);border:1px solid var(--rest)}
+.sw.p{border:1.5px dashed var(--faint)}
+.grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.dow{text-align:center;font-size:.78rem;color:var(--muted);padding-bottom:2px}
+.dow.sun{color:var(--danger)}
+.day{aspect-ratio:1/1;max-width:100%;border:1px solid transparent;border-radius:8px;background:transparent;padding:4px;display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;min-width:0;text-align:left}
+.day .d{font-size:.85rem;font-variant-numeric:tabular-nums}
+.day .l{font-size:.68rem;line-height:1.2;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.day.out{visibility:hidden}
+.day.sched{border:1.5px dashed var(--line)}
+.day.shared{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.day.director{background:var(--gold);color:#1d1606;border-color:var(--gold)}
+.day.skipped{background:repeating-linear-gradient(45deg,var(--sunk) 0 4px,transparent 4px 8px);border:1px solid var(--rest);color:var(--muted)}
+.day.today{box-shadow:0 0 0 2px var(--fg) inset}
+.day:hover{border-color:var(--ink)}
+
+/* 실장님 */
+.dir{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;display:grid;gap:10px}
+.dirlist{display:grid;gap:0}
+.dirrow{display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:baseline;padding:10px 0;border-bottom:1px solid var(--line)}
+.dirrow:last-child{border-bottom:0}
+.dirrow .dt{font-variant-numeric:tabular-nums;color:var(--gold);font-weight:600}
+.dirrow .ref{min-width:0}
+.dirrow .note{display:block;color:var(--muted);font-size:.86rem}
+.empty{color:var(--muted);padding:12px 0}
+
+/* 편집 시트 */
+.sheet{position:fixed;inset:0;background:rgba(10,14,22,.45);display:grid;place-items:center;z-index:20;
+  padding:max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px))}
+.panel{background:var(--surface);border-radius:14px;padding:22px;width:min(460px,100%);max-height:100%;overflow:auto;display:grid;gap:14px;border:1px solid var(--line)}
+.field{display:grid;gap:6px}
+.field label,.field .lab{font-size:.82rem;color:var(--muted);font-weight:600}
+input[type=text],select,textarea{width:100%;border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:10px 12px;font-size:16px}
+textarea{min-height:90px;resize:vertical}
+.seg{display:flex;gap:6px}
+.seg button{flex:1;border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:8px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.check{display:flex;align-items:center;gap:8px}
+.row{display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom, 0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 16px;border-radius:999px;font-size:.9rem;z-index:30}
+.setup{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:24px;display:grid;gap:14px;max-width:520px}
+.dayspick{display:flex;gap:6px;flex-wrap:wrap}
+.dayspick label{border:1px solid var(--line);border-radius:8px;padding:4px 10px;display:inline-flex;gap:4px;align-items:center}
+@media (prefers-reduced-motion:no-preference){.day,.btn{transition:border-color .15s, background-color .15s}}
+.day .i{display:none}
+.memlist{display:grid;gap:8px}
+.mem{display:grid;grid-template-columns:2em minmax(0,1fr) auto auto auto;gap:6px;align-items:center}
+.mem .no{color:var(--muted);font-variant-numeric:tabular-nums;text-align:center;font-weight:600}
+.mem .ic{width:40px;height:40px;padding:0;border:1px solid var(--line);background:var(--bg);border-radius:8px;color:var(--muted)}
+.mem .ic:hover:not(:disabled){border-color:var(--ink);color:var(--fg)}
+.mem .ic:disabled{opacity:.35;cursor:default}
+.mem .ic.x:hover:not(:disabled){border-color:var(--danger);color:var(--danger)}
+.addmem{justify-self:start;border-style:dashed}
+
+/* 휴대폰: 한 줄 쌓기, 큰 터치 영역, 하단 고정 버튼, 아래에서 올라오는 편집 시트 */
+@media (max-width:600px){
+  body{font-size:16px}
+  .app{gap:18px}
+  .wrap{gap:18px;padding-block:14px calc(92px + env(safe-area-inset-bottom, 0px))}
+  h1{font-size:1.45rem}
+  h2{font-size:1.1rem}
+  header{align-items:center}
+  header .row{gap:4px}
+  header .date{font-size:.85rem}
+  .btn{min-height:44px}
+  #settingsBtn,#shareBtn{min-height:36px;padding:4px 10px;font-size:.85rem}
+  .today,.cal,.dir,.people,.setup{border-radius:12px}
+  .lead{padding:18px;gap:10px}
+  .lead .who{font-size:2.1rem}
+  .word{padding:18px}
+  .word .ref{font-size:1.2rem}
+  .verses{max-height:none;overflow:visible;font-size:1.05rem}
+  .lead .actions{position:fixed;left:0;right:0;bottom:0;z-index:15;margin:0;
+    background:var(--surface);border-top:1px solid var(--line);display:grid;grid-template-columns:1fr 1fr;gap:8px;
+    padding:10px max(16px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px))}
+  .lead .actions .btn{min-height:48px;font-size:.95rem;white-space:nowrap;padding-inline:8px}
+  .stats{gap:12px}
+  .streak{padding:16px 18px;grid-template-columns:auto 1fr;column-gap:16px;align-items:center}
+  .streak .eyebrow{grid-column:1/-1}
+  .streak .big{font-size:2.4rem}
+  .people{padding:2px 16px}
+  .person{grid-template-columns:1fr auto;row-gap:6px;column-gap:10px}
+  .person .bar{grid-column:1/-1;grid-row:2}
+  .cal{padding:14px 10px;gap:10px}
+  .calhead{flex-direction:column;align-items:stretch}
+  .calnav{justify-content:space-between}
+  .calnav .btn{min-width:44px;font-size:1.2rem}
+  .legend{gap:8px 12px;font-size:.78rem;justify-content:center}
+  .grid{gap:3px}
+  .day{aspect-ratio:auto;min-height:52px;padding:4px 3px;border-radius:7px}
+  .day .d{font-size:.82rem}
+  .day .l{display:none}
+  .day .i{display:block;font-size:.66rem;line-height:1.2;max-width:100%;overflow:hidden;white-space:nowrap}
+  .dir{padding:16px}
+  .dirrow{grid-template-columns:1fr auto;row-gap:2px}
+  .dirrow .dt{grid-column:1/-1}
+  .sheet{place-items:end stretch;padding:0}
+  .panel{width:100%;max-height:88vh;border-radius:16px 16px 0 0;border-bottom:0;padding:18px max(16px, env(safe-area-inset-right, 0px)) calc(18px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px))}
+  .panel::before{content:"";width:40px;height:4px;border-radius:2px;background:var(--line);justify-self:center;margin-top:-6px}
+  .seg button{min-height:48px}
+  .check{min-height:44px}
+  .check input{width:22px;height:22px}
+  .dayspick label{min-height:40px}
+  .toast{bottom:calc(84px + env(safe-area-inset-bottom, 0px));max-width:calc(100% - 32px);text-align:center}
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div>
+      <div class="eyebrow">매일성경 · 월·수 아침</div>
+      <h1>아침묵상 나눔 기록</h1>
+    </div>
+    <div class="row" style="align-items:center">
+      <span class="date num" id="todayLabel"></span>
+      <button class="btn ghost" id="shareBtn" type="button" hidden>링크 복사</button>
+      <button class="btn ghost" id="settingsBtn" type="button" hidden>팀 설정</button>
+    </div>
+  </header>
+
+  <div class="notice" id="notice">팀 기록을 불러오는 중…</div>
+
+  <section class="join" id="join" hidden>
+    <h2>팀 기록 열기</h2>
+    <p class="muted" style="margin:0">팀에서 받은 링크로 열면 바로 들어가요. 링크 대신 20자리 코드를 받았다면 아래에 넣어 주세요.</p>
+    <form id="joinForm">
+      <input type="text" id="joinCode" placeholder="받은 링크 또는 20자리 코드" autocomplete="off">
+      <button class="btn primary" type="submit">참여</button>
+    </form>
+    <p style="margin:0"><button class="link" id="newRoom" type="button">새 기록장 만들기</button></p>
+    <div class="muted" id="joinMsg" style="font-size:.9rem"></div>
+  </section>
+
+  <div class="app" id="app" hidden>
+
+  <section id="setup" class="setup" hidden>
+    <h2 id="setupTitle">팀 정보를 먼저 입력해 주세요</h2>
+    <p class="muted" style="margin:0">인도 순서대로 이름을 적으면, 마지막으로 나눈 사람 다음 차례를 자동으로 알려 드려요. 쉰 날은 차례가 넘어가지 않습니다. 팀원이 늘면 언제든 추가하고 순서를 바꿀 수 있어요.</p>
+    <div class="field"><span class="lab">인도 순서</span>
+      <div class="memlist" id="memList"></div>
+      <button class="btn ghost addmem" id="addMem" type="button">+ 인도자 추가</button>
+    </div>
+    <div class="field"><span class="lab">모이는 요일</span>
+      <div class="dayspick" id="daysPick"></div></div>
+    <div class="row"><button class="btn ghost" id="cancelSetup" type="button">닫기</button><button class="btn primary" id="saveSetup" type="button" style="margin-left:auto">저장</button></div>
+  </section>
+
+  <section class="today" id="todayCard">
+    <div class="lead">
+      <div class="eyebrow" id="leadLabel">오늘의 인도자</div>
+      <div class="who" id="leadWho">…</div>
+      <div class="meta" id="leadMeta">기록을 불러오는 중이에요.</div>
+      <div class="rota" id="rota"></div>
+      <div class="actions">
+        <button class="btn primary" id="recordToday" type="button">오늘 기록하기</button>
+        <button class="btn" id="copyNotice" type="button">팀즈 안내문 복사</button>
+      </div>
+    </div>
+    <div class="word" id="word">
+      <div class="eyebrow">오늘의 말씀</div>
+      <div id="wordBody" style="display:grid;gap:10px"></div>
+    </div>
+  </section>
+
+  <section class="stats">
+    <div class="streak">
+      <div class="eyebrow" style="color:inherit;opacity:.8">이어서 나누는 중</div>
+      <div class="big num" id="streakNum">0<small>회째</small></div>
+      <div class="sub" id="streakSub">모임일을 빠짐없이 나눈 횟수예요.</div>
+    </div>
+    <div class="people">
+      <div id="people"></div>
+    </div>
+  </section>
+
+  <section class="cal">
+    <div class="calhead">
+      <div class="calnav">
+        <button class="btn ghost" id="prevM" type="button" aria-label="이전 달">‹</button>
+        <h2 id="monthLabel" class="num"></h2>
+        <button class="btn ghost" id="nextM" type="button" aria-label="다음 달">›</button>
+      </div>
+      <div class="legend">
+        <span><i class="sw s"></i>나눈 날</span>
+        <span><i class="sw d"></i>실장님과 함께</span>
+        <span><i class="sw r"></i>쉰 날</span>
+        <span><i class="sw p"></i>모임일(미기록)</span>
+      </div>
+    </div>
+    <div class="grid" id="calGrid"></div>
+    <div class="muted" style="font-size:.85rem">날짜를 누르면 그날 기록을 남기거나 고칠 수 있어요.</div>
+  </section>
+
+  <section class="dir">
+    <div class="row" style="align-items:baseline">
+      <h2>실장님과 함께한 날</h2>
+      <span class="muted num" id="dirCount"></span>
+    </div>
+    <div class="dirlist" id="dirList"></div>
+  </section>
+  </div>
+</div>
+
+<div class="sheet" id="sheet" hidden>
+  <form class="panel" id="editForm">
+    <div>
+      <div class="eyebrow" id="edDow"></div>
+      <h2 id="edTitle" class="num"></h2>
+    </div>
+    <div class="field"><span class="lab">이날은</span>
+      <div class="seg" id="edStatus">
+        <button type="button" data-v="shared" aria-pressed="true">나눴어요</button>
+        <button type="button" data-v="skipped" aria-pressed="false">쉬었어요</button>
+      </div>
+    </div>
+    <div class="field" id="edLeaderField"><label for="edLeader">인도자</label><select id="edLeader"></select></div>
+    <label class="check" id="edDirField"><input type="checkbox" id="edDirector"> 실장님과 함께 예배했어요</label>
+    <div class="field"><label for="edRef">본문</label><input type="text" id="edRef" placeholder="예: 마가복음 10:1-12"></div>
+    <div class="field"><label for="edNote">메모</label><textarea id="edNote" placeholder="쉰 이유, 나눔 요약, 기도제목 등"></textarea></div>
+    <div class="row">
+      <button type="button" class="btn danger ghost" id="edDelete">기록 지우기</button>
+      <div class="row">
+        <button type="button" class="btn" id="edCancel">닫기</button>
+        <button type="submit" class="btn primary" id="edSave">저장</button>
+      </div>
+    </div>
+  </form>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const SITE = "https://sum.su.or.kr:8888/bible/today";
+const DOW = ["일","월","화","수","목","금","토"];
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pad = n => String(n).padStart(2,"0");
+const iso = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const parse = s => { const [y,m,d] = s.split("-").map(Number); return new Date(y, m-1, d); };
+const pretty = s => { const d = parse(s); return `${d.getMonth()+1}월 ${d.getDate()}일 (${DOW[d.getDay()]})`; };
+const TODAY = iso(new Date());
+
+const state = {
+  team: null, teamLoaded: false,
+  sessions: {},
+  view: (() => { const d = new Date(); return {y:d.getFullYear(), m:d.getMonth()}; })(),
+  db: null, editing: null,
+};
+
+function members(){ return (state.team?.members || []).filter(Boolean); }
+function meetDays(){ return state.team?.days?.length ? state.team.days : [1,3]; }
+function isMeetDay(s){ return meetDays().includes(parse(s).getDay()); }
+
+/* 다음 인도자: 오늘 이전 마지막 '나눈 날'의 인도자 다음 순서. 쉰 날은 순서를 넘기지 않는다. */
+function lastSharedBefore(dateStr){
+  return Object.values(state.sessions)
+    .filter(s => s.status === "shared" && s.leader && s.date < dateStr)
+    .sort((a,b) => b.date.localeCompare(a.date))[0] || null;
+}
+function nextAfter(name){
+  const ms = members(); if (!ms.length) return null;
+  const i = ms.indexOf(name);
+  return ms[(i + 1) % ms.length] ?? ms[0];
+}
+function nextMeetDay(fromStr){
+  const d = parse(fromStr);
+  for (let i = 0; i < 14; i++){ const s = iso(d); if (isMeetDay(s)) return s; d.setDate(d.getDate()+1); }
+  return fromStr;
+}
+
+/* 연속 기록: 오늘(미기록이면 건너뜀)부터 거꾸로, 모임일과 기록된 날을 이어 보며 '나눈 날'이 끊길 때까지 센다. */
+function streak(){
+  const dates = Object.keys(state.sessions).sort();
+  if (!dates.length) return {n:0, since:null};
+  const first = dates[0];
+  const d = parse(TODAY); let n = 0, since = null;
+  while (iso(d) >= first){
+    const s = iso(d), rec = state.sessions[s];
+    if (rec || isMeetDay(s)){
+      if (rec?.status === "shared"){ n++; since = s; }
+      else if (!(s === TODAY && !rec)) break;
+    }
+    d.setDate(d.getDate()-1);
+  }
+  return {n, since};
+}
+
+function renderAll(){
+  $("todayLabel").textContent = pretty(TODAY);
+  const needSetup = state.teamLoaded && !members().length;
+  if (needSetup && !state.setupOpen) openSetup();
+  $("setup").hidden = !state.setupOpen;
+  $("cancelSetup").hidden = needSetup;
+  renderLead(); renderWord(); renderStats(); renderCal(); renderDir();
+}
+
+function leadInfo(){
+  const todayRec = state.sessions[TODAY];
+  if (todayRec?.status === "shared" && todayRec.leader){
+    return {label:"오늘 인도", who: todayRec.leader, date: TODAY, done:true,
+      next: nextAfter(todayRec.leader)};
+  }
+  const date = nextMeetDay(TODAY);
+  const last = lastSharedBefore(date);
+  const who = last ? nextAfter(last.leader) : members()[0];
+  return {label: date === TODAY ? "오늘의 인도자" : "다음 인도자", who, date, last, done:false};
+}
+
+function renderLead(){
+  const ms = members();
+  if (!ms.length){
+    $("leadWho").textContent = "—";
+    $("leadMeta").textContent = state.teamLoaded ? "팀 설정에서 인도자를 순서대로 입력하면 차례가 표시돼요." : "기록을 불러오는 중이에요.";
+    $("rota").innerHTML = ""; return;
+  }
+  const info = leadInfo();
+  $("leadLabel").textContent = info.label;
+  $("leadWho").textContent = info.who || "—";
+  let meta;
+  if (info.done) meta = `오늘 나눔을 기록했어요. 다음 차례는 ${info.next}님이에요.`;
+  else {
+    const when = info.date === TODAY ? "오늘" : pretty(info.date);
+    meta = info.last ? `${when} · 지난 나눔은 ${pretty(info.last.date)} ${info.last.leader}님` : `${when} · 첫 기록이에요`;
+    const rec = state.sessions[TODAY];
+    if (rec?.status === "skipped") meta = `오늘은 쉬었어요. 차례는 그대로 ${info.who}님이에요.`;
+  }
+  $("leadMeta").textContent = meta;
+  $("rota").innerHTML = ms.map(m => `<span class="${m===info.who?'on':''}">${esc(m)}</span>`).join("");
+  $("recordToday").textContent = state.sessions[TODAY] ? "오늘 기록 고치기" : "오늘 기록하기";
+}
+
+function renderWord(){
+  $("wordBody").innerHTML = `<div class="ref">오늘 본문 (개역개정)</div>
+    <p class="muted" style="margin:0">매일성경 사이트에서 오늘 본문과 해설을 볼 수 있어요.</p>
+    <a class="btn primary" style="justify-self:start;text-decoration:none;display:inline-flex;align-items:center" href="${SITE}" target="_blank" rel="noopener">매일성경 오늘 본문 열기 ↗</a>`;
+}
+function renderStats(){
+  const {n, since} = streak();
+  $("streakNum").innerHTML = `${n}<small>회째</small>`;
+  $("streakSub").textContent = n ? `${pretty(since)}부터 모임일마다 이어서 나누고 있어요.` : "다음 모임부터 다시 이어가요.";
+  const ms = members();
+  const shared = Object.values(state.sessions).filter(s => s.status === "shared");
+  const rows = ms.map(m => {
+    const mine = shared.filter(s => s.leader === m).sort((a,b) => b.date.localeCompare(a.date));
+    return {m, count: mine.length, last: mine[0]?.date};
+  });
+  const max = Math.max(1, ...rows.map(r => r.count));
+  $("people").innerHTML = rows.length ? rows.map(r => `
+    <div class="person">
+      <div class="name">${esc(r.m)}</div>
+      <div class="bar" aria-hidden="true"><i style="width:${(r.count/max*100).toFixed(0)}%"></i></div>
+      <div class="right num"><b>${r.count}회</b> · ${r.last ? "최근 " + pretty(r.last) : "아직 없음"}</div>
+    </div>`).join("") : `<div class="empty">팀 설정을 마치면 사람별 인도 횟수와 최근 인도일이 여기에 보여요.</div>`;
+}
+
+function renderCal(){
+  const {y, m} = state.view;
+  $("monthLabel").textContent = `${y}년 ${m+1}월`;
+  const first = new Date(y, m, 1), days = new Date(y, m+1, 0).getDate();
+  let html = DOW.map((d,i) => `<div class="dow ${i===0?'sun':''}">${d}</div>`).join("");
+  for (let i = 0; i < first.getDay(); i++) html += `<div class="day out"></div>`;
+  for (let d = 1; d <= days; d++){
+    const s = `${y}-${pad(m+1)}-${pad(d)}`, rec = state.sessions[s];
+    let cls = "day", label = "";
+    if (rec?.status === "shared"){ cls += rec.director ? " director" : " shared"; label = rec.leader || ""; }
+    else if (rec?.status === "skipped"){ cls += " skipped"; label = "쉼"; }
+    else if (isMeetDay(s)) cls += " sched";
+    if (s === TODAY) cls += " today";
+    const aria = `${pretty(s)}${rec ? (rec.status==="shared" ? ` 나눔 ${rec.leader||""}${rec.director?" 실장님과 함께":""}` : " 쉼") : ""}`;
+    html += `<button type="button" class="${cls}" data-date="${s}" aria-label="${esc(aria)}"><span class="d">${d}</span><span class="l">${esc(label)}</span><span class="i">${esc(rec?.status === "shared" && label.length > 2 ? label.slice(-2) : label)}</span></button>`;
+  }
+  $("calGrid").innerHTML = html;
+}
+
+function renderDir(){
+  const list = Object.values(state.sessions).filter(s => s.status === "shared" && s.director)
+    .sort((a,b) => b.date.localeCompare(a.date));
+  $("dirCount").textContent = list.length ? `모두 ${list.length}번` : "";
+  $("dirList").innerHTML = list.length ? list.map(s => `
+    <div class="dirrow">
+      <span class="dt">${pretty(s.date)}</span>
+      <span class="ref">${esc(s.ref || "본문 미기록")}${s.note ? `<span class="note">${esc(s.note)}</span>` : ""}</span>
+      <span class="muted">${esc(s.leader || "")}</span>
+    </div>`).join("") : `<div class="empty">실장님과 함께 예배한 날을 기록하면 여기에 모여요. 기록할 때 ‘실장님과 함께 예배했어요’를 체크하세요.</div>`;
+}
+
+/* 편집 시트 */
+function openEditor(date){
+  if (!members().length){ toast("팀 설정을 먼저 해 주세요"); return; }
+  state.editing = date;
+  const rec = state.sessions[date];
+  const d = parse(date);
+  $("edDow").textContent = isMeetDay(date) ? "모임일" : "모임일 아님";
+  $("edTitle").textContent = `${d.getFullYear()}년 ${pretty(date)}`;
+  const suggested = (() => { const last = lastSharedBefore(date); return last ? nextAfter(last.leader) : members()[0]; })();
+  $("edLeader").innerHTML = members().map(m => `<option>${esc(m)}</option>`).join("");
+  $("edLeader").value = rec?.leader || suggested;
+  setStatus(rec?.status || "shared");
+  $("edDirector").checked = !!rec?.director;
+  $("edRef").value = rec?.ref || "";
+  $("edNote").value = rec?.note || "";
+  $("edDelete").hidden = !rec;
+  $("sheet").hidden = false;
+  $("edLeader").focus();
+}
+function setStatus(v){
+  [...$("edStatus").children].forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === v)));
+  $("edLeaderField").hidden = v !== "shared";
+  $("edDirField").hidden = v !== "shared";
+}
+function curStatus(){ return [...$("edStatus").children].find(b => b.getAttribute("aria-pressed")==="true").dataset.v; }
+function closeEditor(){ $("sheet").hidden = true; state.editing = null; }
+
+async function write(fn, ok){
+  if (!state.db){ toast("팀 기록에 아직 연결되지 않았어요"); return false; }
+  try { await fn(); if (ok) toast(ok); return true; }
+  catch(e){
+    if (e?.code === "permission-denied") showNotice(explain(e));
+    else toast("저장하지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요");
+    return false;
+  }
+}
+
+$("edStatus").addEventListener("click", e => { const b = e.target.closest("button"); if (b) setStatus(b.dataset.v); });
+$("edCancel").addEventListener("click", closeEditor);
+$("sheet").addEventListener("click", e => { if (e.target === $("sheet")) closeEditor(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("sheet").hidden) closeEditor(); });
+$("editForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const date = state.editing, status = curStatus();
+  const rec = {date, status, ref: $("edRef").value.trim(), note: $("edNote").value.trim(), updatedAt: new Date().toISOString()};
+  if (status === "shared"){ rec.leader = $("edLeader").value; rec.director = $("edDirector").checked; }
+  else { rec.leader = ""; rec.director = false; }
+  if (await write(() => state.db.doc("sessions/" + date).set(rec), "저장했어요")) closeEditor();
+});
+$("edDelete").addEventListener("click", async () => {
+  const b = $("edDelete");
+  if (b.dataset.armed !== "1"){ b.dataset.armed = "1"; b.textContent = "한 번 더 누르면 지워져요"; setTimeout(() => { b.dataset.armed=""; b.textContent="기록 지우기"; }, 3000); return; }
+  b.dataset.armed = ""; b.textContent = "기록 지우기";
+  if (await write(() => state.db.doc("sessions/" + state.editing).delete(), "지웠어요")) closeEditor();
+});
+
+$("calGrid").addEventListener("click", e => { const b = e.target.closest("button[data-date]"); if (b) openEditor(b.dataset.date); });
+$("prevM").addEventListener("click", () => { const v = state.view; v.m--; if (v.m < 0){ v.m = 11; v.y--; } renderCal(); });
+$("nextM").addEventListener("click", () => { const v = state.view; v.m++; if (v.m > 11){ v.m = 0; v.y++; } renderCal(); });
+$("recordToday").addEventListener("click", () => openEditor(TODAY));
+
+/* 팀즈 안내문 */
+function noticeText(){
+  const info = leadInfo();
+  return [
+    `[아침묵상 안내] ${pretty(info.date)}`,
+    `인도·기도: ${info.done ? info.who : (info.who || "-")}`,
+    `본문: ${state.sessions[info.date]?.ref || "매일성경 오늘 본문"}`,
+    `말씀 보기: ${SITE}`,
+  ].join("\n");
+}
+$("copyNotice").addEventListener("click", async () => {
+  const t = noticeText();
+  try { await navigator.clipboard.writeText(t); toast("안내문을 복사했어요. 팀즈에 붙여 넣으세요"); }
+  catch { showNotice(t.replace(/\n/g, " · ")); toast("복사가 막혀 있어 위에 문구를 띄웠어요"); }
+});
+
+/* 팀 설정 */
+function renderDaysPick(){
+  const cur = meetDays();
+  $("daysPick").innerHTML = [1,2,3,4,5].map(d => `<label><input type="checkbox" value="${d}" ${cur.includes(d)?"checked":""}> ${DOW[d]}</label>`).join("");
+}
+/* 인도자 목록: 저장 전까지는 draft에서만 바뀐다 */
+function openSetup(){
+  const ms = state.team?.members || [];
+  state.draft = ms.length ? [...ms] : ["", "", ""];
+  state.setupOpen = true;
+  $("setupTitle").textContent = ms.length ? "팀 설정" : "팀 정보를 먼저 입력해 주세요";
+  renderMemList(); renderDaysPick();
+}
+function renderMemList(focusIdx){
+  const n = state.draft.length;
+  $("memList").innerHTML = state.draft.map((name, i) => `
+    <div class="mem">
+      <span class="no">${i+1}</span>
+      <input type="text" id="mem-${i}" data-i="${i}" value="${esc(name)}" placeholder="이름" aria-label="${i+1}번 인도자">
+      <button type="button" class="ic" data-act="up" data-i="${i}" aria-label="위로" ${i===0?"disabled":""}>↑</button>
+      <button type="button" class="ic" data-act="down" data-i="${i}" aria-label="아래로" ${i===n-1?"disabled":""}>↓</button>
+      <button type="button" class="ic x" data-act="del" data-i="${i}" aria-label="빼기" ${n<=2?"disabled":""}>✕</button>
+    </div>`).join("");
+  if (focusIdx != null) $("mem-" + focusIdx)?.focus();
+}
+$("memList").addEventListener("input", e => { const i = e.target.dataset.i; if (i != null) state.draft[i] = e.target.value; });
+$("memList").addEventListener("click", e => {
+  const b = e.target.closest("button[data-act]"); if (!b) return;
+  const i = Number(b.dataset.i), d = state.draft;
+  if (b.dataset.act === "up" && i > 0){ [d[i-1], d[i]] = [d[i], d[i-1]]; renderMemList(i-1); }
+  if (b.dataset.act === "down" && i < d.length-1){ [d[i+1], d[i]] = [d[i], d[i+1]]; renderMemList(i+1); }
+  if (b.dataset.act === "del" && d.length > 2){ d.splice(i, 1); renderMemList(Math.min(i, d.length-1)); }
+});
+$("addMem").addEventListener("click", () => {
+  if (state.draft.length >= 20){ toast("인도자는 20명까지 넣을 수 있어요"); return; }
+  state.draft.push(""); renderMemList(state.draft.length - 1);
+});
+$("settingsBtn").addEventListener("click", () => {
+  openSetup(); renderAll();
+  $("setup").scrollIntoView({behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block:"start"});
+  $("mem-0")?.focus();
+});
+$("cancelSetup").addEventListener("click", () => { state.setupOpen = false; renderAll(); });
+$("saveSetup").addEventListener("click", async () => {
+  const names = state.draft.map(s => s.trim()).filter(Boolean);
+  if (names.length < 2){ toast("인도자를 두 명 이상 입력해 주세요"); return; }
+  if (new Set(names).size !== names.length){ toast("같은 이름이 두 번 들어가 있어요"); return; }
+  const days = [...$("daysPick").querySelectorAll("input:checked")].map(i => Number(i.value));
+  if (await write(() => state.db.doc("config/team").set({members: names, days: days.length ? days : [1,3]}), "팀 설정을 저장했어요")){ state.setupOpen = false; renderAll(); }
+});
+
+let toastTimer;
+function toast(t){ const el = $("toast"); el.textContent = t; el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => el.hidden = true, 2600); }
+function showNotice(t){ $("notice").textContent = t; $("notice").hidden = false; }
+
+/* ---- Firebase (Firestore) ----
+   기록은 qts/{room}/config/team, qts/{room}/sessions/{날짜} 에 있다. 링크의 room 코드가 팀 기록장의 열쇠다. */
+const FIREBASE_SDK = "https://www.gstatic.com/firebasejs/10.12.2";
+const ROOM_KEY = "qt.room";
+const ROOM_RE = /^[a-z0-9]{20}$/;
+const storageGet = k => { try { return localStorage.getItem(k); } catch { return null; } };
+const storageSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+const newCode = () => { const a = "abcdefghijklmnopqrstuvwxyz0123456789", b = crypto.getRandomValues(new Uint8Array(20)); return [...b].map(x => a[x % 36]).join(""); };
+const parseCode = v => { v = (v || "").trim(); const m = v.match(/[?&]room=([a-z0-9]{20})/); if (m) return m[1]; return ROOM_RE.test(v) ? v : null; };
+const shareUrl = room => `${location.origin}${location.pathname}?room=${room}`;
+
+function explain(e){
+  if (e?.code === "permission-denied") return "Firebase 규칙에 아침묵상(qts) 허용이 필요해요. qt/README.md의 규칙을 게시해 주세요.";
+  return "기록을 불러오지 못했어요. 인터넷 연결을 확인하고 새로고침해 주세요.";
+}
+
+async function makeDb(room){
+  const config = (await import("./firebase-config.js")).default;
+  if (!config) throw new Error("no-config");
+  const [{ initializeApp, getApps }, fs] = await Promise.all([
+    import(`${FIREBASE_SDK}/firebase-app.js`),
+    import(`${FIREBASE_SDK}/firebase-firestore.js`)
+  ]);
+  const app = getApps()[0] || initializeApp(config);
+  const f = fs.getFirestore(app);
+  const base = `qts/${room}`;
+  const wrap = d => ({ id: d.id, exists: d.exists(), data: () => d.data() });
+  return {
+    doc: p => {
+      const r = fs.doc(f, `${base}/${p}`);
+      return {
+        set: d => fs.setDoc(r, d),
+        delete: () => fs.deleteDoc(r),
+        onSnapshot: (next, err) => fs.onSnapshot(r, d => next(wrap(d)), err)
+      };
+    },
+    collection: p => ({
+      onSnapshot: (next, err) => fs.onSnapshot(fs.collection(f, `${base}/${p}`), q => next({ docs: q.docs.map(wrap) }), err)
+    })
+  };
+}
+
+async function openRoom(room){
+  storageSet(ROOM_KEY, room);
+  if (new URLSearchParams(location.search).get("room") !== room){ try { history.replaceState(null, "", shareUrl(room)); } catch {} }
+  $("join").hidden = true; $("app").hidden = false;
+  $("shareBtn").hidden = false; $("settingsBtn").hidden = false;
+  showNotice("팀 기록을 불러오는 중…");
+  try { state.db = await makeDb(room); }
+  catch(e){ state.db = null; showNotice(explain(e)); return; }
+  const fail = e => showNotice(explain(e));
+  state.db.doc("config/team").onSnapshot(s => {
+    $("notice").hidden = true;
+    state.team = s.exists ? s.data() : null; state.teamLoaded = true; renderAll();
+  }, fail);
+  state.db.collection("sessions").onSnapshot(q => {
+    const o = {}; q.docs.forEach(d => o[d.id] = d.data()); state.sessions = o; renderAll();
+  }, fail);
+}
+
+$("shareBtn").addEventListener("click", async () => {
+  const url = shareUrl(storageGet(ROOM_KEY) || "");
+  try { await navigator.clipboard.writeText(url); toast("링크를 복사했어요. 팀즈 단톡방에 올려 주세요"); }
+  catch { showNotice(`이 링크를 팀원에게 보내 주세요: ${url}`); }
+});
+$("joinForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const room = parseCode($("joinCode").value);
+  if (!room){ $("joinMsg").textContent = "링크나 코드가 맞지 않아요. 받은 링크를 그대로 붙여 넣어 주세요."; return; }
+  openRoom(room);
+});
+$("newRoom").addEventListener("click", () => openRoom(newCode()));
+
+renderAll(); renderDaysPick();
+{
+  const room = parseCode(new URLSearchParams(location.search).get("room") || "") || parseCode(storageGet(ROOM_KEY));
+  if (room) openRoom(room);
+  else { $("notice").hidden = true; $("join").hidden = false; }
+}
+if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(() => { /* 오프라인 실행만 안 될 뿐 */ });
+</script>
+</body>
+</html>
