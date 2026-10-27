@@ -3,9 +3,37 @@
 김해리 · 한체리 · 김JK 세 명이 매주 수요일 팀식 식당을 순서대로 고르고, 누가 언제 어디를 골랐는지 함께 남기는 앱입니다.
 
 ## 열기
-- **실제로 쓰는 곳 (공유 기록이 저장되는 곳):** https://claude.ai/artifact/SE3thxeBmsJW6ycJywkyRD
-  - claude.ai에 로그인하고, 페이지 주인에게 **보기보다 높은 권한**으로 공유받아야 기록을 남길 수 있습니다.
-- 이 폴더의 `index.html`은 화면 코드 사본입니다. 기록·일정·추천은 claude.ai의 공유 저장소에 있어서, GitHub Pages(`https://harry-gimsong.github.io/PR/lunch/`)나 파일로 열면 빈 화면과 안내 문구만 보입니다.
+- GitHub Pages 주소: `https://harry-gimsong.github.io/PR/lunch/`
+- 처음엔 **팀에서 받은 링크**(`...lunch/?room=20자리코드`)로 열어야 같은 당번표에 들어갑니다. 한 번 열면 그 브라우저가 기억해요.
+- 휴대폰에서는 "홈 화면에 추가"로 앱처럼 쓸 수 있어요.
+
+## 함께 쓰기 (Firebase)
+가계부·여행 지도·레벨업과 **같은 Firebase 프로젝트**를 씁니다(`lunch/firebase-config.js`). 처음 한 번만 Firestore 규칙에 점심 당번표 칸을 열어 주면 됩니다.
+
+https://console.firebase.google.com → 여행 지도 프로젝트 → **Firestore Database → 규칙** 탭에서 아래 내용으로 바꾸고 **게시**
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /maps/{room} {
+      allow read, write: if room.matches('^[a-z0-9]{20}$');
+    }
+    match /budgets/{room}/{rest=**} {
+      allow read, write: if room.matches('^[a-z0-9]{20}$');
+    }
+    match /levelups/{room}/{rest=**} {
+      allow read, write: if room.matches('^[a-z0-9]{20}$');
+    }
+    match /lunches/{room}/{rest=**} {
+      allow read, write: if room.matches('^[a-z0-9]{20}$');
+    }
+  }
+}
+```
+(이 단계를 빼먹으면 앱 위쪽에 "Firebase 규칙에 점심 당번표(lunches) 허용이 필요해요"라고 나옵니다.)
+
+- 링크를 처음 연 사람이 당번표를 만들면 순서(한체리 → 김해리 → 김JK, 이번 차례 김해리)와 2026-10-28 ~ 2027-06-30 매주 수요일 일정(2027-05-05 어린이날은 쉬는 날)이 자동으로 들어갑니다.
+- 오른쪽 위 **팀원에게 링크 복사**로 같은 링크를 보내면 됩니다. 링크를 아는 사람은 누구나 기록을 고칠 수 있으니 팀 밖에는 보내지 마세요.
 
 ## 기능
 | 기능 | 하는 일 |
