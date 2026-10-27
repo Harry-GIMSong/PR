@@ -3,11 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,-apple-system,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
-</head>
-<body>
 <title>점심 당번표</title>
-<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="theme-color" content="#1d6f52">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
@@ -40,6 +37,8 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+html { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+[hidden] { display: none !important; }
 body {
   background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.55;
   padding-block: 28px 48px;
@@ -175,16 +174,38 @@ input::placeholder { color: var(--muted); opacity: .7; }
 .airec-foot { font-size: 12px; color: var(--muted); }
 .empty { padding: 22px 16px; color: var(--muted); font-size: 14px; text-align: center; display: block !important; }
 .notice { font-size: 13px; color: var(--muted); }
+.join { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px; display: grid; gap: 12px; }
+.join p { margin: 0; color: var(--muted); font-size: 14px; }
+.join form { display: flex; gap: 8px; flex-wrap: wrap; }
+.join input { flex: 1 1 220px; }
+.head-tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 </style>
+</head>
+<body>
 
 <div class="wrap">
   <header>
     <h1>점심 당번표</h1>
-    <span class="today" id="today"></span>
+    <div class="head-tools">
+      <span class="today" id="today"></span>
+      <button class="btn-ghost" id="shareBtn" type="button" hidden>팀원에게 링크 복사</button>
+    </div>
   </header>
+
+  <section class="join" id="join" hidden>
+    <h2 style="margin:0">팀 당번표 열기</h2>
+    <p>팀에서 받은 링크로 열면 바로 들어가요. 링크 대신 20자리 코드를 받았다면 아래에 넣어 주세요.</p>
+    <form id="joinForm">
+      <input id="joinCode" placeholder="받은 링크 또는 20자리 코드" autocomplete="off">
+      <button class="btn" type="submit">참여</button>
+    </form>
+    <p><button class="link" id="newRoom" type="button">새 당번표 만들기</button></p>
+    <div class="msg" id="joinMsg"></div>
+  </section>
 
   <p id="status" class="notice">팀 기록을 불러오는 중…</p>
 
+  <div id="app" hidden style="display:flex;flex-direction:column;gap:28px">
   <section class="ticket" aria-labelledby="turnLabel">
     <div class="ticket-top">
       <span class="ticket-label" id="turnLabel">이번 팀식 식당 고를 사람</span>
@@ -255,6 +276,7 @@ input::placeholder { color: var(--muted); opacity: .7; }
     <h2>이력</h2>
     <ul class="log" id="log"></ul>
   </section>
+  </div>
 </div>
 
 <script>
@@ -487,7 +509,7 @@ const now = () => nameAt(turn.current);
 const next = () => nameAt(turn.current + 1);
 
 function setMsg(text, err) { $("pickMsg").textContent = text; $("pickMsg").className = "msg" + (err ? " err" : ""); }
-const writeFail = () => setMsg("저장하지 못했어요. claude.ai에 로그인했는지, 이 페이지를 쓸 수 있게 공유받았는지 확인해 주세요.", true);
+const writeFail = () => setMsg("저장하지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.", true);
 
 async function saveTurn(patch) {
   const data = { order: patch.order ?? turn.order, current: ((patch.current ?? turn.current) % 3 + 3) % 3, updatedAt: new Date().toISOString() };
@@ -651,32 +673,122 @@ $("pickForm").addEventListener("submit", async e => {
 
 render();
 
-(async () => {
-  db = window.claude ? await window.claude.use("db") : null;
-  if (!db) { $("status").textContent = "claude.ai에서 로그인하고 열어야 팀 기록을 보고 남길 수 있어요."; return; }
+// ---- Firebase (Firestore) ----
+// Data lives at lunches/{room}/{state|schedule|history|recs}. The room code in the link is the key to the team's board.
+const FIREBASE_SDK = "https://www.gstatic.com/firebasejs/10.12.2";
+const ROOM_KEY = "lunch.room";
+const ROOM_RE = /^[a-z0-9]{20}$/;
+const SEED_ORDER = ["한체리", "김해리", "김JK"], SEED_CURRENT = 1;
+const SEED_FROM = "2026-10-28", SEED_TO = "2027-06-30", SEED_OFF = { "2027-05-05": "어린이날" };
+
+const storageGet = k => { try { return localStorage.getItem(k); } catch { return null; } };
+const storageSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+const newCode = () => { const a = "abcdefghijklmnopqrstuvwxyz0123456789", b = crypto.getRandomValues(new Uint8Array(20)); return [...b].map(x => a[x % 36]).join(""); };
+const parseCode = v => { v = (v || "").trim(); const m = v.match(/[?&]room=([a-z0-9]{20})/); if (m) return m[1]; return ROOM_RE.test(v) ? v : null; };
+const shareUrl = room => `${location.origin}${location.pathname}?room=${room}`;
+
+function showStatus(text) { $("status").hidden = false; $("status").textContent = text; }
+function explain(e) {
+  if (e && e.code === "permission-denied") return "Firebase 규칙에 점심 당번표(lunches) 허용이 필요해요. lunch/README.md의 규칙을 게시해 주세요.";
+  return "기록을 불러오지 못했어요. 인터넷 연결을 확인하고 새로고침해 주세요.";
+}
+
+async function makeDb(room) {
+  const config = (await import("./firebase-config.js")).default;
+  if (!config) throw new Error("no-config");
+  const [{ initializeApp, getApps }, fs] = await Promise.all([
+    import(`${FIREBASE_SDK}/firebase-app.js`),
+    import(`${FIREBASE_SDK}/firebase-firestore.js`)
+  ]);
+  const app = getApps()[0] || initializeApp(config);
+  const f = fs.getFirestore(app);
+  const base = `lunches/${room}`;
+  const wrap = s => ({ id: s.id, exists: s.exists(), data: () => s.data() });
+  const docRef = p => {
+    const r = fs.doc(f, `${base}/${p}`);
+    return {
+      get: async () => wrap(await fs.getDoc(r)),
+      set: d => fs.setDoc(r, d),
+      update: d => fs.updateDoc(r, d),
+      delete: () => fs.deleteDoc(r),
+      onSnapshot: (next, err) => fs.onSnapshot(r, s => next(wrap(s)), err)
+    };
+  };
+  const colRef = p => {
+    const c = fs.collection(f, `${base}/${p}`);
+    return {
+      add: d => fs.addDoc(c, d),
+      doc: id => docRef(`${p}/${id}`),
+      onSnapshot: (next, err) => fs.onSnapshot(c, qs => next({ docs: qs.docs.map(wrap) }), err)
+    };
+  };
+  // First open of an empty board: put in the rotation and every Wednesday of the season
+  async function seedIfEmpty() {
+    const turnRef = fs.doc(f, `${base}/state/turn`);
+    if ((await fs.getDoc(turnRef)).exists()) return;
+    const batch = fs.writeBatch(f);
+    batch.set(turnRef, { order: SEED_ORDER, current: SEED_CURRENT, updatedAt: new Date().toISOString() });
+    for (let d = SEED_FROM; d <= SEED_TO; d = addDays(d, 7)) {
+      batch.set(fs.doc(f, `${base}/schedule/${d}`), SEED_OFF[d] ? { date: d, status: "off", note: SEED_OFF[d] } : { date: d, status: "lunch" });
+    }
+    await batch.commit();
+  }
+  return { doc: docRef, collection: colRef, seedIfEmpty };
+}
+
+async function openRoom(room) {
+  storageSet(ROOM_KEY, room);
+  if (new URLSearchParams(location.search).get("room") !== room) history_replace(room);
+  $("join").hidden = true; $("app").hidden = false; $("shareBtn").hidden = false;
+  showStatus("팀 기록을 불러오는 중…");
+  try {
+    db = await makeDb(room);
+    await db.seedIfEmpty();
+  } catch (e) { db = null; showStatus(explain(e)); return; }
   $("status").hidden = true;
+  const onErr = e => showStatus(explain(e));
   db.doc("state/turn").onSnapshot(snap => {
     const d = snap.exists ? snap.data() : null;
     turnExists = !!d;
     if (d && validOrder(d.order) && Number.isInteger(d.current)) turn = { order: [...d.order], current: ((d.current % 3) + 3) % 3 };
     else turn = { order: [...MEMBERS], current: 0 };
     render();
-  }, () => { $("status").hidden = false; $("status").textContent = "기록을 불러오지 못했어요. 새로고침해 주세요."; });
+  }, onErr);
   db.collection("recs").onSnapshot(snap => {
     recs = new Map(snap.docs.map(d => [d.id, d.data()]));
     render();
-  });
+  }, onErr);
   db.collection("schedule").onSnapshot(snap => {
     schedule = snap.docs.map(d => d.data()).filter(s => typeof s.date === "string").sort((a, b) => a.date.localeCompare(b.date));
     render();
-  });
+  }, onErr);
   db.collection("history").onSnapshot(snap => {
     history = snap.docs.map(d => ({ id: d.id, ...d.data() }))
       .filter(h => typeof h.date === "string")
       .sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt || "").localeCompare(a.createdAt || ""));
     render();
-  });
-})();
+  }, onErr);
+}
+function history_replace(room) { try { window.history.replaceState(null, "", shareUrl(room)); } catch {} }
+
+$("shareBtn").onclick = async () => {
+  const url = shareUrl(storageGet(ROOM_KEY) || "");
+  try { await navigator.clipboard.writeText(url); setMsg("링크를 복사했어요. 팀원에게 보내 주세요."); }
+  catch { setMsg(`이 링크를 팀원에게 보내 주세요: ${url}`); }
+};
+$("joinForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const room = parseCode($("joinCode").value);
+  if (!room) { $("joinMsg").textContent = "링크나 코드가 맞지 않아요. 받은 링크를 그대로 붙여 넣어 주세요."; $("joinMsg").className = "msg err"; return; }
+  openRoom(room);
+});
+$("newRoom").onclick = () => openRoom(newCode());
+
+{
+  const room = parseCode(new URLSearchParams(location.search).get("room") || "") || parseCode(storageGet(ROOM_KEY));
+  if (room) openRoom(room);
+  else { $("status").hidden = true; $("join").hidden = false; }
+}
 </script>
 </body>
 </html>
