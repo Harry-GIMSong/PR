@@ -233,6 +233,11 @@ const REST = [
   { id: "lwalk", name: "가벼운 산책", icon: "🚶", unit: "분", a: 20, b: 40, step: 5, stat: "agi", ms: [], tip: "숨이 차지 않는 속도. 오늘은 땀 흘리지 않는 날." },
   SLEEP
 ];
+// 협주 퀘스트: 클리어·올클에는 들어가지 않는 선택 퀘스트. 같은 날 파티원과 둘 다 목표를 채우면 협주 보너스
+const BONUS = [
+  { id: "jdance", name: "저스트댄스", icon: "🕺", unit: "곡", a: 2, b: 5, step: 1, stat: "agi", ms: [], tip: "한 곡 3~4분. 같은 날 둘 다 목표 곡 수를 채우면 협주 성공!" }
+];
+const COOP_XP = 15;
 const VER = {
   m: {
     label: "남자 버전", icon: "🗡️", theme: "blue", job: "대마왕 토벌자",
@@ -380,8 +385,8 @@ function target(q, d, rec) {
 }
 function questsFor(d) {
   const v = VER[S.gender];
-  if (isRest(d)) return { main: REST, sub: [] };
-  return { main: v.main.map(q => ({ ...q, deload: true })), sub: v.sub };
+  if (isRest(d)) return { main: REST, sub: [], bonus: [] };
+  return { main: v.main.map(q => ({ ...q, deload: true })), sub: v.sub, bonus: BONUS };
 }
 
 // ===== 계산: 저장된 기록에서 경험치·능력치·연속 기록을 모두 다시 계산한다 =====
@@ -411,16 +416,17 @@ function derive() {
   const tot = {}, pr = {};
   const D = [], snaps = [];
   let xp = S.bank.xp || 0, run = 0, runStart = 0, best = { len: 0, s: 0 }, earned = 0, doneCount = 0, over = 0, penDone = 0, deloads = 0;
+  const coopDates = new Set(activeMembers().filter(m => m.id !== S.pid).flatMap(m => m.danced || []));
   const duoDates = new Set(activeMembers().filter(m => m.id !== S.pid).flatMap(m => m.cleared || []));
   let pending = [], bosses = {}, sleepSum = 0, sleepN = 0, goodSleepRun = 0, bestSleepRun = 0;
   for (let d = 1; d <= last; d++) {
     const rec = S.days[d] || {};
     const vals = rec.q || {};
     const r = rankIdx(d), m = RANKS[r].m, rest = isRest(d);
-    const { main: mq, sub: sq } = questsFor(d);
+    const { main: mq, sub: sq, bonus: bq } = questsFor(d);
     const pen = d > 1 && !D[d - 2].ok;
     const row = q => ({ q, t: target(q, d, rec), v: +vals[q.id] || 0 });
-    const main = mq.map(row), sub = sq.map(row);
+    const main = mq.map(row), sub = sq.map(row), bonus = bq.map(row);
     main.forEach(x => x.met = x.v >= x.t);
     sub.forEach(x => x.met = x.v >= x.t);
     const mainsMet = main.every(x => x.met);
@@ -438,6 +444,14 @@ function derive() {
       if (!rest && !rec.dl && x.v >= x.t * 1.5) { over++; xp += 3; }
     }
     for (const x of sub) { tot[x.q.id] = (tot[x.q.id] || 0) + x.v; if (x.met) { xp += 6 * m; st[x.q.stat]++; } }
+    for (const x of bonus) {
+      x.met = x.v >= x.t;
+      tot[x.q.id] = (tot[x.q.id] || 0) + x.v;
+      if (x.v > 0 && (!pr[x.q.id] || x.v > pr[x.q.id].v)) pr[x.q.id] = { v: x.v, d };
+      if (x.v > 0) xp += 4 * m;
+      if (x.met) { xp += 8 * m; st[x.q.stat]++; }
+      if (x.met && coopDates.has(dateOf(d))) { x.coop = true; xp += COOP_XP; }
+    }
     for (const c of S.custom) if (rec.c && rec.c[c.id]) { xp += 5; st[c.stat]++; }
     const sl = +vals.sleep || 0;
     if (sl > 0) { sleepSum += sl; sleepN++; }
@@ -453,7 +467,7 @@ function derive() {
     if (ok) { if (run === 0) runStart = d; run++; if (done && run % 7 === 0) earned++; }
     else if (d < T) run = 0;
     if (run > best.len) best = { len: run, s: runStart };
-    const day = { d, date: dateOf(d), rec, main, sub, pen, done, full, shield, ok, mainsMet, subsMet, r, rest };
+    const day = { d, date: dateOf(d), rec, main, sub, bonus, pen, done, full, shield, ok, mainsMet, subsMet, r, rest };
     if (done) day.loot = dropFor(day);
     if (done && duoDates.has(day.date)) { day.duo = true; xp += DUO_XP; }
     D.push(day);
@@ -477,7 +491,7 @@ function derive() {
   });
   return { T, last, D, snaps, xp: Math.floor(xp), level: L, rem, nextNeed: need(L), stats: total, base: st, free: (L - 1) * 3 - alloc,
     tot, pr, run, best, doneCount, over, penDone, deloads, bosses, shields: earned - used, earned, used,
-    mates: mates(D), loot: D.filter(x => x.loot).map(x => ({ ...x.loot, d: x.d })), duo: D.filter(x => x.duo).length,
+    coop: D.filter(x => x.bonus.some(m => m.coop)).length, mates: mates(D), loot: D.filter(x => x.loot).map(x => ({ ...x.loot, d: x.d })), duo: D.filter(x => x.duo).length,
     sleepAvg: sleepN ? sleepSum / sleepN : 0, bestSleepRun, ev, evN, power: Math.round(Object.values(total).reduce((a, b) => a + b, 0) * (1 + L / 10)) };
 }
 
@@ -552,11 +566,19 @@ function achList() {
   A("dex10", "loot", "🎒", "수집가", "서로 다른 장비 10종 모으기", C => { const n = new Set(C.loot.map(l => l.name)).size; return n >= 10 && `Day ${C.last}까지 ${n}종`; });
   A("dexall", "loot", "📖", "도감 완성", "숙제 드랍 장비 전부 모으기", C => { const n = new Set(C.loot.map(l => l.name)).size; return n >= ITEMS.length && `Day ${C.last} 도감 ${n}/${ITEMS.length}`; }, { title: "아이템 수집왕" });
   A("job", "loot", "🎓", "전직 완료", "Day 8에 직업 고르기", () => S.job && `${CLASSES[S.job].icon} ${CLASSES[S.job].name}(으)로 전직`);
+  // 저스트댄스
+  const danced = C => C.D.filter(x => x.bonus.some(m => m.q.id === "jdance" && m.v > 0));
+  A("jd1", "dance", "🕺", "댄스 데뷔", "저스트댄스 첫 기록", C => { const x = danced(C)[0]; return x && `Day ${x.d} (${x.date}) ${x.bonus.find(m => m.q.id === "jdance").v}곡`; });
+  A("jd50", "dance", "💃", "댄스 50곡", "저스트댄스 누적 50곡", C => (C.tot.jdance || 0) >= 50 && `Day ${C.last}까지 누적 ${C.tot.jdance}곡`);
+  A("jd200", "dance", "🪩", "댄스 200곡", "저스트댄스 누적 200곡", C => (C.tot.jdance || 0) >= 200 && `Day ${C.last}까지 누적 ${C.tot.jdance}곡`, { title: S.gender === "f" ? "댄싱 퀸" : "댄싱 킹" });
+  A("jd7", "dance", "🎵", "댄스 일주일", "7일 동안 저스트댄스 기록", C => { const x = danced(C)[6]; return x && `7번째 댄스: Day ${x.d}`; });
+  A("duet", "party", "👯", "듀엣 댄스", "저스트댄스 협주 퀘스트 첫 성공", C => { const x = C.D.find(x => x.bonus.some(m => m.coop)); return x && `Day ${x.d} (${x.date}) 협주 성공 · +${COOP_XP} XP`; });
+  A("duet10", "party", "🪩", "환상의 호흡", "저스트댄스 협주 10번 성공", C => C.coop >= 10 && `Day ${C.last}까지 협주 ${C.coop}번`, { title: "듀엣 댄서" });
   A("duo1", "party", "🎶", "첫 협주", "같은 날 파티원과 둘 다 숙제 끝", C => { const x = C.D.find(x => x.duo); return x && `Day ${x.d} (${x.date}) 협주 성공 · +${DUO_XP} XP`; });
   return L;
 }
 const ACH = () => achList();
-const CATS = { habit: "꾸준함", growth: "성장의 증거", rest: "회복", total: "누적", rank: "레이드", loot: "장비·전직", party: "파티", hidden: "숨겨진 업적" };
+const CATS = { dance: "저스트댄스", habit: "꾸준함", growth: "성장의 증거", rest: "회복", total: "누적", rank: "레이드", loot: "장비·전직", party: "파티", hidden: "숨겨진 업적" };
 
 // ===== 상태 =====
 let C = null, tab = "quest", viewDay = null, achCat = "all", mapSel = null, queue = [];
@@ -688,6 +710,7 @@ function questView() {
   }
   h += `<div class="sec">${x.rest ? "INN · 여관 퀘스트" : `MAIN · 본 퀘스트 ${rec.dl ? "(쉬엄쉬엄 70%)" : ""}`}</div>` + x.main.map(m => qrow(d, m)).join("");
   if (x.sub.length) h += `<div class="sec">SUB · 서브 퀘스트 <span class="muted small">(올클 = 장비 등급 UP · 레이드 조건)</span></div>` + x.sub.map(m => qrow(d, m)).join("");
+  if (x.bonus.length) h += `<div class="sec">CO-OP · 협주 퀘스트 <span class="muted small">(선택 · 같은 날 둘 다 채우면 +${COOP_XP} XP)</span></div>` + x.bonus.map(m => qrow(d, m) + coopLine(x, m)).join("");
   if (S.custom.length) h += `<div class="sec">MY · 나만의 퀘스트</div>` + S.custom.map(c => `<label class="tick"><input type="checkbox" ${rec.c && rec.c[c.id] ? "checked" : ""} onchange="setCustom(${d},'${c.id}',this.checked)"> ${esc(c.name)} <span class="chip">${STAT_ICON[c.stat]} ${STATS[c.stat]}</span></label>`).join("");
   h += `<div class="sec">LOG · 모험 일지</div><textarea id="note" rows="2" style="width:100%" maxlength="200" placeholder="오늘 달라진 점 한 줄 (예: 계단 오를 때 숨이 덜 찼다)" onchange="setNote(${d},this.value)">${esc(rec.note || "")}</textarea>`;
   h += x.done ? `<div class="clear" style="margin-top:12px">${x.full ? "PERFECT CLEAR" : "QUEST CLEAR"}</div>
@@ -708,6 +731,17 @@ function setJob(k) {
   S.job = k; refresh();
   if (first) queue.push({ big: CLASSES[k].icon, title: "전직 완료!", body: `${S.name}님은 이제 ${CLASSES[k].name}입니다.\n숙제를 끝낸 날마다 ${STATS[CLASSES[k].stat]} +1` });
   render(); pump();
+}
+function coopLine(x, m) {
+  // 파티원의 오늘 협주 퀘스트 진행
+  const mates = activeMembers().filter(p => p.id !== S.pid);
+  if (!S.party || !mates.length) return `<p class="small muted" style="margin:-2px 0 8px">👥 파티를 맺으면 같이 하는 협주 퀘스트가 돼요.</p>`;
+  const rows = mates.map(p => {
+    const it = p.today && p.today.date === x.date ? (p.today.items || []).find(i => i.b && i.n === m.q.name) : null;
+    const ok = (p.danced || []).includes(x.date);
+    return `${esc(p.name)} ${it ? `${fmt(it.v)}/${fmt(it.t)}${m.q.unit}` : "아직"} ${ok ? "✅" : ""}`;
+  }).join(" · ");
+  return `<p class="small" style="margin:-2px 0 8px">${m.coop ? `🎶 <b style="color:var(--rest)">협주 성공! +${COOP_XP} XP</b> · ` : "👥 "}${rows}</p>`;
 }
 function qrow(d, m) {
   const q = m.q, pct = Math.min(100, m.v / m.t * 100);
@@ -765,7 +799,7 @@ function statusView() {
   // 신체 능력 기록
   h += `<div class="win"><div class="win-h"><span>신체 능력</span></div>
     <table><tr><th>종목</th><th>오늘 목표</th><th>최고 기록</th><th>누적</th></tr>
-    ${v.main.map(q => { const p = C.pr[q.id]; return `<tr><td>${q.icon} ${q.name}</td><td>${fmt(target({ ...q, deload: false }, Math.min(C.T, 66)))}${q.unit}</td>
+    ${v.main.concat(BONUS.filter(b => C.tot[b.id] > 0)).map(q => { const p = C.pr[q.id]; return `<tr><td>${q.icon} ${q.name}</td><td>${fmt(target({ ...q, deload: false }, Math.min(C.T, 66)))}${q.unit}</td>
       <td>${p ? `${fmt(p.v)}${q.unit} <span class="muted small">D${p.d}</span>` : "-"}</td><td>${fmt(C.tot[q.id] || 0)}</td></tr>`; }).join("")}</table>
     ${growthTable()}</div>`;
 
@@ -818,8 +852,8 @@ function logView() {
   // 종목별 성장 곡선
   const v = VER[S.gender];
   h += `<div class="win"><div class="win-h"><span>성장 곡선</span></div><p class="muted small" style="margin-top:0">점선 = 시스템 목표, 실선 = 내 기록. 처음과 지금을 비교해 보세요.</p>`;
-  for (const q of [...v.main, SLEEP]) {
-    const pts = C.D.filter(x => !x.rest || q.id === "sleep").map(x => ({ d: x.d, t: target(q, x.d), v: (x.main.concat(x.sub).find(m => m.q.id === q.id) || {}).v || 0 }));
+  for (const q of [...v.main, SLEEP, ...BONUS.filter(b => C.tot[b.id] > 0)]) {
+    const pts = C.D.filter(x => !x.rest || q.id === "sleep").map(x => ({ d: x.d, t: target(q, x.d), v: (x.main.concat(x.sub, x.bonus).find(m => m.q.id === q.id) || {}).v || 0 }));
     const rec = pts.filter(p => p.v > 0);
     const a = rec[0], b = rec[rec.length - 1];
     h += `<div class="between" style="margin-top:10px"><b>${q.icon} ${q.name}</b>
@@ -837,7 +871,7 @@ function dayDetail(d) {
   if (!x) return `<p class="muted small" style="margin-top:12px">Day ${d} (${dateOf(d)}) — 아직 열리지 않은 날. ${BOSS_DAYS.includes(d) ? `${SHADOWS[rankIdx(d)].icon} 레이드: ${SHADOWS[rankIdx(d)].name} 출현 예정.` : isRest(d) ? "🏨 여관." : ""}</p>`;
   const st = x.done ? (x.full && !x.rest ? "퍼펙트 클리어" : "클리어") : x.shield ? "부활의 깃털" : d < C.T ? "실패" : "진행 중";
   let h = `<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px"><div class="between"><b>Day ${d} · ${x.date}</b><span class="chip">${st}</span></div>
-    <div class="small" style="margin-top:6px">${x.main.concat(x.sub).map(m => `${m.q.icon} ${m.q.name} <b class="${m.met ? "up" : ""}">${fmt(m.v)}</b>/${fmt(m.t)}${m.q.unit}`).join(" · ")}</div>
+    <div class="small" style="margin-top:6px">${x.main.concat(x.sub, x.bonus.filter(m => m.v > 0)).map(m => `${m.q.icon} ${m.q.name} <b class="${m.met ? "up" : ""}">${fmt(m.v)}</b>/${fmt(m.t)}${m.q.unit}`).join(" · ")}</div>
     ${x.rec.fat ? `<div class="small muted">피로도 ${x.rec.fat}/5${x.rec.dl ? " · 🧪 쉬엄쉬엄" : ""}</div>` : ""}
     ${x.rec.note ? `<div class="small">✍️ ${esc(x.rec.note)}</div>` : ""}
     ${x.loot ? `<div class="small">🎁 ${x.loot.icon} ${rar(x.loot)}${x.duo ? " · 🎶 협주" : ""}</div>` : ""}`;
@@ -925,7 +959,7 @@ function setVal(d, id, val) {
   day(d).q[id] = n; stamp(d); refresh(); render();
 }
 function bump(d, id, dir) {
-  const all = [...VER[S.gender].main, ...VER[S.gender].sub, ...REST];
+  const all = [...VER[S.gender].main, ...VER[S.gender].sub, ...REST, ...BONUS];
   const q = all.find(q => q.id === id);
   const cur = +(day(d).q[id] || 0);
   setVal(d, id, Math.max(0, Number((cur + dir * q.step).toFixed(1))));
@@ -1085,7 +1119,9 @@ function snapshot() {
     run: C.run, best: C.best.len, done: C.doneCount, stats: C.stats, sleep: Math.round(C.sleepAvg * 10) / 10,
     shadows: RANKS.filter(r => S.ach["boss_" + r.id]).length,
     today: x ? { date: x.date, done: x.done, full: x.full, rest: x.rest, pen: x.pen, fat: x.rec.fat || 0, dl: !!x.rec.dl, note: x.rec.note || "",
-      items: x.main.concat(x.sub).map(m => ({ n: m.q.name, i: m.q.icon, v: m.v, t: m.t, u: m.q.unit })) } : null,
+      items: x.main.concat(x.sub).map(m => ({ n: m.q.name, i: m.q.icon, v: m.v, t: m.t, u: m.q.unit }))
+        .concat(x.bonus.filter(m => m.v > 0).map(m => ({ n: m.q.name, i: m.q.icon, v: m.v, t: m.t, u: m.q.unit, b: 1 }))) } : null,
+    danced: C.D.filter(y => y.bonus.some(m => m.q.id === "jdance" && m.met)).map(y => y.date),
     map: Array.from({ length: 66 }, (_, i) => { const y = C.D[i]; return !y ? "." : y.full ? "f" : y.done ? (y.rest ? "r" : "d") : y.shield ? "s" : i + 1 < C.T ? "m" : "."; }).join(""),
     cleared: C.D.filter(y => y.done).map(y => y.date),
     ach: Object.keys(S.ach).length,
@@ -1260,13 +1296,14 @@ function partyView() {
 }
 function mateCard(m, isMe) {
   const t = m.today, live = t && t.date === todayStr();
-  const prog = live ? t.items.filter(x => x.v >= x.t).length + "/" + t.items.length : "-";
+  const req = live ? t.items.filter(x => !x.b) : [];
+  const prog = live ? req.filter(x => x.v >= x.t).length + "/" + req.length : "-";
   const state = !live ? '<span class="muted small">오늘 기록 없음</span>' : t.done ? `<span class="done">${t.full && !t.rest ? "PERFECT" : "CLEAR"}</span>` : `<span class="small">진행 ${prog}</span>`;
   return `<button class="mate ${isMe ? "me" : ""}" onclick="partySel='${m.id}';render();scrollTo(0,0)" style="--acc:${esc(m.acc || "#3ab0ff")}">
     <div class="rank">${esc(m.rank)}</div>
     <div style="min-width:0"><div class="between"><b>${m.leader ? "👑 " : ""}${esc(m.name)}${isMe ? " (나)" : ""}</b><span class="lv">Lv.${m.level}</span></div>
       <div class="small muted">「${esc(m.title)}」 · ${CLASSES[m.job] ? CLASSES[m.job].icon + " " + CLASSES[m.job].name : "무직"} · Day ${Math.min(m.day, 66)} · 🔥${m.run}일</div>
-      ${live ? `<div class="bar ${t.done ? "ok" : ""}" style="margin-top:6px"><i style="width:${t.items.length ? t.items.filter(x => x.v >= x.t).length / t.items.length * 100 : 0}%"></i></div>` : ""}
+      ${live ? `<div class="bar ${t.done ? "ok" : ""}" style="margin-top:6px"><i style="width:${req.length ? req.filter(x => x.v >= x.t).length / req.length * 100 : 0}%"></i></div>` : ""}
       <div class="mini">${[...(m.map || "")].map(c => `<i class="${c}"></i>`).join("")}</div>
       ${!isMe && m.at ? `<div class="small muted" style="margin-top:4px">${ago(m.at)} 업데이트</div>` : ""}</div>
     <div>${state}</div></button>`;
