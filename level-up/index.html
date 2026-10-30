@@ -891,19 +891,41 @@ function spark(pts, q) {
 }
 
 // --- 업적 ---
-function achView() {
-  const list = ACH(), got = list.filter(a => S.ach[a.id]).length;
-  let h = `<div class="win"><div class="win-h"><span>업적 · 변화의 증거</span></div>
-    <div class="between"><span class="muted small">업적마다 해금 순간의 기록이 '증거'로 남습니다.</span><b>${got}/${list.length}</b></div>
-    <div class="bar" style="margin:8px 0 12px"><i style="width:${got / list.length * 100}%"></i></div>
-    <div class="tabs2">${[["all", "전체"], ...Object.entries(CATS)].map(([k, n]) => `<button class="${achCat === k ? "on" : ""}" onclick="achCat='${k}';render()">${n}</button>`).join("")}</div>`;
-  for (const a of list.filter(a => achCat === "all" || a.cat === achCat).sort((a, b) => !!S.ach[b.id] - !!S.ach[a.id])) {
-    const g = S.ach[a.id], hid = a.cat === "hidden" && !g;
-    h += `<div class="ach ${g ? "got" : ""}"><div class="ai">${hid ? "❔" : a.icon}</div><div>
+// 업적은 분류마다 몇 개만 보여 주고 '더보기'로 펼친다
+const achMore = {};
+function achRow(a) {
+  const g = S.ach[a.id], hid = a.cat === "hidden" && !g;
+  return `<div class="ach ${g ? "got" : ""}"><div class="ai">${hid ? "❔" : a.icon}</div><div>
       <div class="between"><span class="an">${hid ? "??? " : esc(a.name)}</span>${a.title && !hid ? `<span class="chip ${g ? "gold" : ""}">칭호</span>` : ""}</div>
       <div class="small muted">${hid ? `힌트: ${a.hint}` : esc(a.desc)}</div>
       ${g ? `<div class="ev">${esc(g.ev)}</div><div class="small muted">${new Date(g.at).toLocaleDateString("ko-KR")} 달성</div>` : ""}</div></div>`;
-  }
+}
+function achGroup(key, items, limit) {
+  // 받은 업적(최근 순) 먼저, 그다음 아직 못 받은 업적
+  const sorted = [...items].sort((a, b) => (S.ach[b.id] ? S.ach[b.id].at : 0) - (S.ach[a.id] ? S.ach[a.id].at : 0));
+  const open = achMore[key], shown = open ? sorted : sorted.slice(0, limit), rest = sorted.length - limit;
+  let h = shown.map(achRow).join("");
+  if (rest > 0) h += `<button class="btn ghost" style="width:100%;margin-bottom:8px" onclick="achMore['${key}']=${!open};render()">${open ? "접기 ▲" : `더보기 (+${rest}) ▼`}</button>`;
+  return h;
+}
+function achView() {
+  const list = ACH(), got = list.filter(a => S.ach[a.id]).length;
+  const n = k => { const xs = list.filter(a => a.cat === k); return `${xs.filter(a => S.ach[a.id]).length}/${xs.length}`; };
+  let h = `<div class="win"><div class="win-h"><span>업적 · 변화의 증거</span></div>
+    <div class="between"><span class="muted small">업적마다 해금 순간의 기록이 '증거'로 남습니다.</span><b>${got}/${list.length}</b></div>
+    <div class="bar" style="margin:8px 0 12px"><i style="width:${got / list.length * 100}%"></i></div>
+    <div class="tabs2">${[["all", "전체"], ...Object.entries(CATS)].map(([k, nm]) => `<button class="${achCat === k ? "on" : ""}" onclick="achCat='${k}';render()">${nm}${k === "all" ? "" : ` <span class="muted small">${n(k)}</span>`}</button>`).join("")}</div>`;
+  if (achCat === "all") {
+    // 전체: 최근 달성 몇 개와 분류별 진행만. 분류를 누르면 그 탭으로
+    const recent = list.filter(a => S.ach[a.id]).sort((a, b) => S.ach[b.id].at - S.ach[a.id].at).slice(0, 3);
+    h += `<div class="sec" style="margin-top:4px">RECENT · 최근 달성</div>` + (recent.map(achRow).join("") || `<p class="muted small">아직 없어요. 첫 숙제를 끝내 보세요!</p>`);
+    h += `<div class="sec">CATEGORY · 분류</div>` + Object.entries(CATS).map(([k, nm]) => {
+      const xs = list.filter(a => a.cat === k), g = xs.filter(a => S.ach[a.id]).length;
+      return xs.length ? `<button class="tick" style="width:100%;text-align:left;display:block" onclick="achCat='${k}';render()">
+        <div class="between"><b>${nm}</b><span class="small">${g}/${xs.length} ›</span></div>
+        <div class="bar" style="margin-top:6px"><i style="width:${g / xs.length * 100}%"></i></div></button>` : "";
+    }).join("");
+  } else h += achGroup(achCat, list.filter(a => a.cat === achCat), 6);
   return h + `</div>`;
 }
 
