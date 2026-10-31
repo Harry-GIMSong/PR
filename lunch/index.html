@@ -1,0 +1,794 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>점심 당번표</title>
+<meta name="theme-color" content="#1d6f52">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: one narrow column — a meal-ticket card for today's turn, then the rotation roster, then the logbook. */
+:root {
+  --bg: #eef1ef;
+  --surface: #ffffff;
+  --ink: #1b2421;
+  --muted: #5f6b67;
+  --line: #d5dcd9;
+  --accent: #1d6f52;
+  --accent-ink: #ffffff;
+  --egg: #f3b72f;
+  --egg-soft: #fdf1d2;
+  --danger: #b3261e;
+  --f-display: "Black Han Sans", "IBM Plex Sans KR", sans-serif;
+  --f-body: "IBM Plex Sans KR", system-ui, -apple-system, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121816; --surface: #1b2320; --ink: #e6ece9; --muted: #98a6a1; --line: #2e3a36;
+    --accent: #4fbf92; --accent-ink: #0d1a15; --egg: #f3b72f; --egg-soft: #3a2f14; --danger: #ff8a80;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121816; --surface: #1b2320; --ink: #e6ece9; --muted: #98a6a1; --line: #2e3a36;
+  --accent: #4fbf92; --accent-ink: #0d1a15; --egg: #f3b72f; --egg-soft: #3a2f14; --danger: #ff8a80;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.55;
+  padding-block: 28px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+header { display: flex; justify-content: space-between; align-items: end; gap: 12px; flex-wrap: wrap; }
+h1 { font-family: var(--f-display); font-weight: 400; font-size: 34px; line-height: 1; margin: 0; letter-spacing: .01em; }
+.today { font-family: var(--f-mono); color: var(--muted); font-size: 13px; }
+h2 { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; font-weight: 700; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+button:disabled { opacity: .5; cursor: default; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Ticket */
+.ticket { background: var(--surface); border-radius: 14px; box-shadow: 0 1px 0 var(--line), 0 10px 30px -18px rgba(0,0,0,.35); }
+.ticket-top { padding: 22px 22px 18px; display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; align-items: end; }
+.ticket-label { font-size: 13px; color: var(--muted); grid-column: 1 / -1; }
+.picker-name { font-family: var(--f-display); font-size: 44px; line-height: 1.1; overflow-wrap: anywhere; min-width: 0; }
+.picker-name mark { background: linear-gradient(transparent 58%, var(--egg) 58%); color: inherit; padding: 0 2px; }
+.next-box { text-align: right; display: grid; gap: 0; padding-bottom: 6px; }
+.next-box span { font-size: 12px; color: var(--muted); }
+.next-box b { font-size: 18px; }
+.turn-actions { grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.perf { height: 0; border-top: 2px dashed var(--line); margin: 0 14px; position: relative; }
+.perf::before, .perf::after { content: ""; position: absolute; top: -11px; width: 20px; height: 20px; border-radius: 50%; background: var(--bg); }
+.perf::before { left: -24px; } .perf::after { right: -24px; }
+.ticket-form { padding: 18px 22px 22px; display: grid; gap: 12px; }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 440px) { .row { grid-template-columns: 1fr; } .picker-name { font-size: 38px; } }
+label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); min-width: 0; }
+input, select { width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; color: var(--ink); }
+input::placeholder { color: var(--muted); opacity: .7; }
+.btn { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 8px; padding: 12px 16px; font-weight: 700; }
+.btn-ghost { background: transparent; border: 1px solid var(--line); color: var(--ink); border-radius: 8px; padding: 7px 12px; font-size: 13px; }
+.btn-ghost.on { border-color: var(--accent); color: var(--accent); }
+.link { background: none; border: 0; padding: 0; color: var(--accent); font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
+.done { background: var(--egg-soft); border-radius: 10px; padding: 14px 16px; font-size: 14px; }
+.done b { font-weight: 700; }
+.msg { font-size: 13px; min-height: 1em; color: var(--muted); }
+.msg.err { color: var(--danger); }
+.panel { background: var(--bg); border-radius: 10px; padding: 12px 14px; display: grid; gap: 8px; grid-column: 1 / -1; font-size: 14px; }
+.panel .opts { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Roster */
+.roster { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+@media (max-width: 400px) { .roster { grid-template-columns: 1fr; } }
+.member { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 2px; min-width: 0; }
+.member.now { border-color: var(--egg); box-shadow: inset 0 0 0 1px var(--egg); }
+.member .pos { font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+.member .nm { font-weight: 700; font-size: 17px; overflow-wrap: anywhere; }
+.member .st { font-size: 12px; color: var(--muted); }
+.member.now .st { color: var(--ink); font-weight: 700; }
+.member .ct { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.member .mv { display: flex; gap: 4px; margin-top: 6px; }
+.member .mv button { flex: 1; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 2px 0; font-size: 13px; color: var(--muted); }
+.roster-foot { margin-top: 10px; font-size: 13px; color: var(--muted); }
+
+/* Log */
+.log { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.log li { display: grid; grid-template-columns: 76px 1fr auto; gap: 12px; align-items: start; padding: 12px 14px; border-top: 1px solid var(--line); }
+.log li:first-child { border-top: 0; }
+.log .d { font-family: var(--f-mono); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; padding-top: 2px; }
+.log .w { min-width: 0; display: grid; gap: 2px; }
+.log .menu { font-weight: 700; overflow-wrap: anywhere; }
+.log .meta { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.log .rev { font-size: 14px; overflow-wrap: anywhere; }
+.log .rev::before { content: "“"; color: var(--muted); }
+.log .rev::after { content: "”"; color: var(--muted); }
+.log li.event .menu { font-weight: 400; color: var(--muted); font-size: 14px; }
+.rev-form { display: flex; gap: 6px; }
+.rev-form input { padding: 6px 10px; font-size: 14px; }
+.rev-form button { flex: none; }
+.chip { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 99px; background: var(--egg-soft); color: var(--ink); margin-right: 6px; }
+.side { display: grid; gap: 2px; justify-items: end; }
+.del { background: none; border: 0; color: var(--muted); font-size: 12px; padding: 2px 4px; }
+.del.confirm { color: var(--danger); font-weight: 700; }
+.stars { display: inline-flex; gap: 2px; }
+.stars button { background: none; border: 0; padding: 2px; font-size: 22px; line-height: 1; color: var(--line); }
+.stars button.on { color: var(--egg); }
+.stars.sm button { font-size: 18px; }
+.stars-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.star-txt { color: var(--egg); letter-spacing: 1px; }
+.warn { background: var(--egg-soft); border-left: 3px solid var(--egg); border-radius: 6px; padding: 10px 12px; font-size: 14px; }
+.warn b { font-weight: 700; }
+.rec-bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rec { background: var(--bg); border: 1px dashed var(--accent); border-radius: 10px; padding: 12px 14px; display: grid; gap: 8px; }
+.rec .rec-main { font-size: 17px; }
+.rec .rec-main b { font-weight: 700; }
+.rec .rec-why { font-size: 13px; color: var(--muted); }
+.rec .opts { display: flex; gap: 8px; flex-wrap: wrap; }
+.rev-edit { display: grid; gap: 6px; }
+
+/* Restaurant ranking */
+.rank-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.rank-head h2 { margin: 0; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { background: var(--surface); border: 0; padding: 5px 12px; font-size: 13px; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.rank { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.rank li { display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; align-items: baseline; padding: 10px 14px; border-top: 1px solid var(--line); }
+.rank li:first-child { border-top: 0; }
+.rank .no { font-family: var(--f-mono); font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.rank li:nth-child(-n+3) .no { color: var(--accent); font-weight: 700; }
+.rank .pl { min-width: 0; display: grid; gap: 1px; }
+.rank .pl b { overflow-wrap: anywhere; }
+.rank .pl span { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.rank .nums { text-align: right; display: grid; gap: 1px; font-variant-numeric: tabular-nums; }
+.rank .nums b { font-size: 14px; }
+.rank .nums span { font-size: 12px; color: var(--muted); }
+.sched li { grid-template-columns: 76px 1fr auto; align-items: center; }
+.sched li.off .w { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--line); }
+.sched li.target { background: var(--egg-soft); }
+.sched .who { font-weight: 700; }
+.sched .sub { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.tag { display: inline-block; font-size: 11px; padding: 0 7px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); margin-left: 6px; vertical-align: 1px; text-decoration: none; }
+.tag.now { border-color: var(--egg); background: var(--egg); color: #1b2421; }
+.airec { display: grid; gap: 10px; }
+.wx { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; font-size: 14px; }
+.wx .temp { font-family: var(--f-mono); font-size: 18px; font-variant-numeric: tabular-nums; }
+.wx .wxs { color: var(--muted); font-size: 13px; }
+.cards { display: grid; gap: 8px; }
+.card { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 4px; min-width: 0; }
+.card .ct-top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.card .pn { font-weight: 700; font-size: 16px; overflow-wrap: anywhere; }
+.card .mn { font-size: 13px; color: var(--accent); font-weight: 700; }
+.card .why { font-size: 14px; overflow-wrap: anywhere; }
+.card .src { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.card .acts { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 4px; }
+.card .acts a { font-size: 13px; color: var(--accent); }
+.airec-foot { font-size: 12px; color: var(--muted); }
+.empty { padding: 22px 16px; color: var(--muted); font-size: 14px; text-align: center; display: block !important; }
+.notice { font-size: 13px; color: var(--muted); }
+.join { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px; display: grid; gap: 12px; }
+.join p { margin: 0; color: var(--muted); font-size: 14px; }
+.join form { display: flex; gap: 8px; flex-wrap: wrap; }
+.join input { flex: 1 1 220px; }
+.head-tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>점심 당번표</h1>
+    <div class="head-tools">
+      <span class="today" id="today"></span>
+      <button class="btn-ghost" id="shareBtn" type="button" hidden>팀원에게 링크 복사</button>
+    </div>
+  </header>
+
+  <section class="join" id="join" hidden>
+    <h2 style="margin:0">팀 당번표 열기</h2>
+    <p>팀에서 받은 링크로 열면 바로 들어가요. 링크 대신 20자리 코드를 받았다면 아래에 넣어 주세요.</p>
+    <form id="joinForm">
+      <input id="joinCode" placeholder="받은 링크 또는 20자리 코드" autocomplete="off">
+      <button class="btn" type="submit">참여</button>
+    </form>
+    <p><button class="link" id="newRoom" type="button">새 당번표 만들기</button></p>
+    <div class="msg" id="joinMsg"></div>
+  </section>
+
+  <p id="status" class="notice">팀 기록을 불러오는 중…</p>
+
+  <div id="app" hidden style="display:flex;flex-direction:column;gap:28px">
+  <section class="ticket" aria-labelledby="turnLabel">
+    <div class="ticket-top">
+      <span class="ticket-label" id="turnLabel">이번 팀식 식당 고를 사람</span>
+      <span class="picker-name"><mark id="pickerName">김해리</mark></span>
+      <div class="next-box"><span id="nextLabel">다음 차례</span><b id="nextName">한체리</b></div>
+      <div class="turn-actions" id="turnActions">
+        <button class="btn-ghost" id="skipBtn" type="button">건너뛰기</button>
+        <button class="btn-ghost" id="swapBtn" type="button">다른 사람과 바꾸기</button>
+      </div>
+      <div class="panel" id="skipPanel" hidden>
+        <span id="skipText"></span>
+        <div class="opts">
+          <button class="btn-ghost on" id="skipYes" type="button">건너뛰기</button>
+          <button class="btn-ghost" id="skipNo" type="button">취소</button>
+        </div>
+      </div>
+      <div class="panel" id="swapPanel" hidden>
+        <span id="swapText"></span>
+        <div class="opts" id="swapOpts"></div>
+      </div>
+    </div>
+    <div class="perf"></div>
+    <div id="todayDone" class="ticket-form" hidden></div>
+    <form id="pickForm" class="ticket-form">
+      <div class="airec" id="aiRec" hidden></div>
+      <div class="rec-bar">
+        <span class="notice">어디 갈지 고민되면</span>
+        <button class="btn-ghost on" id="recBtn" type="button">지난 이력에서 추천받기</button>
+      </div>
+      <div class="rec" id="recBox" hidden></div>
+      <label for="pickPlace">식당<input id="pickPlace" placeholder="예: 회사 앞 고향집" maxlength="40" required list="placeList" autocomplete="off"></label>
+      <datalist id="placeList"></datalist>
+      <div class="warn" id="dupWarn" hidden></div>
+      <label for="pickDate">날짜<input id="pickDate" type="date" required></label>
+      <div class="stars-row"><span>식당 별점</span><span class="stars" id="pickStars"></span><span id="pickStarsNote">먹고 나서 이력에서 매겨도 돼요</span></div>
+      <button class="btn" type="submit" id="pickBtn">기록하고 다음 차례로</button>
+      <div class="msg" id="pickMsg"></div>
+    </form>
+  </section>
+
+  <section>
+    <div class="rank-head">
+      <h2>팀식 일정 · 매주 수요일</h2>
+      <button class="link" id="schedMore" type="button">전체 보기</button>
+    </div>
+    <ul class="log sched" id="sched"></ul>
+    <p class="roster-foot">고를 사람은 지금 순서대로 미리 계산한 거예요. 쉬는 날로 바꾸면 그 주는 빼고 다음 사람에게 넘어가요.</p>
+  </section>
+
+  <section>
+    <h2>명단 · 순서</h2>
+    <ol class="roster" id="roster"></ol>
+    <p class="roster-foot">이 순서대로 한 명씩 돌아가요. 화살표로 순서를 바꿀 수 있어요.</p>
+  </section>
+
+  <section>
+    <div class="rank-head">
+      <h2>식당 순위</h2>
+      <div class="seg" role="group" aria-label="정렬">
+        <button type="button" id="sortVisits" aria-pressed="true">자주 간 순</button>
+        <button type="button" id="sortRating" aria-pressed="false">별점 순</button>
+      </div>
+    </div>
+    <ol class="rank" id="rank"></ol>
+  </section>
+
+  <section>
+    <h2>이력</h2>
+    <ul class="log" id="log"></ul>
+  </section>
+  </div>
+</div>
+
+<script>
+const MEMBERS = ["김해리", "한체리", "김JK"];
+const $ = id => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const todayStr = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+const DOW = ["일","월","화","수","목","금","토"];
+const fmtDate = s => { const [y,m,d] = s.split("-").map(Number); return `${m}/${d} (${DOW[new Date(y, m-1, d).getDay()]})`; };
+$("today").textContent = fmtDate(todayStr());
+$("pickDate").value = todayStr();
+
+let db = null;
+let turn = { order: [...MEMBERS], current: 0 };
+let turnExists = false;
+let history = [];
+let pendingDelete = null, editingReview = null;
+let formRating = 0, dupConfirmed = false, rankSort = "visits", lastRecKey = null;
+const DUP_DAYS = 14;
+
+const norm = s => (s || "").replace(/\s+/g, "").toLowerCase();
+const dayNum = s => { const [y,m,d] = s.split("-").map(Number); return Date.UTC(y, m-1, d) / 864e5; };
+const picks = () => history.filter(h => h.type === "pick");
+const starText = n => "★".repeat(n) + "☆".repeat(5 - n);
+
+function makeStars(container, value, onChange, small) {
+  container.innerHTML = ""; container.className = "stars" + (small ? " sm" : "");
+  for (let i = 1; i <= 5; i++) {
+    const b = el("button", i <= value ? "on" : "", "★"); b.type = "button";
+    b.setAttribute("aria-label", `${i}점`); b.setAttribute("aria-pressed", String(i === value));
+    b.onclick = () => onChange(i === value ? 0 : i);
+    container.append(b);
+  }
+}
+function renderFormStars() {
+  makeStars($("pickStars"), formRating, v => { formRating = v; renderFormStars(); });
+  $("pickStarsNote").textContent = formRating ? `${formRating}점` : "먹고 나서 이력에서 매겨도 돼요";
+}
+
+// Same restaurant within the last 2 weeks of the chosen date
+function findDup(place, date) {
+  const key = norm(place); if (!key || !date) return null;
+  const t = dayNum(date);
+  return picks().find(h => norm(h.place) === key && Math.abs(t - dayNum(h.date)) <= DUP_DAYS) || null;
+}
+function renderDup() {
+  const d = findDup($("pickPlace").value, $("pickDate").value);
+  const w = $("dupWarn");
+  if (!d) { w.hidden = true; dupConfirmed = false; $("pickBtn").textContent = `${now()}님 이름으로 기록하고 다음 차례로`; return; }
+  const gap = Math.abs(dayNum($("pickDate").value) - dayNum(d.date));
+  w.innerHTML = "";
+  w.append(el("b", null, "또 먹어요? "), `${fmtDate(d.date)}${gap === 0 ? " 오늘" : ` (${gap}일 전)`}에 ${d.picker}님이 골라서 ${d.place}에 갔어요.`);
+  w.hidden = false;
+  $("pickBtn").textContent = dupConfirmed ? "그래도 기록하기" : `${now()}님 이름으로 기록하고 다음 차례로`;
+}
+
+function placeStats() {
+  const map = new Map();
+  for (const h of picks()) {
+    const k = norm(h.place); if (!k) continue;
+    let s = map.get(k);
+    if (!s) { s = { name: h.place, visits: 0, ratings: [], last: "" }; map.set(k, s); }
+    s.visits++;
+    if (h.rating >= 1 && h.rating <= 5) s.ratings.push(h.rating);
+    if (h.date > s.last) { s.last = h.date; s.name = h.place; }
+  }
+  for (const s of map.values()) s.avg = s.ratings.length ? s.ratings.reduce((a, b) => a + b, 0) / s.ratings.length : null;
+  return [...map.values()];
+}
+
+function renderRank() {
+  const list = placeStats();
+  const byAvg = (a, b) => (b.avg ?? -1) - (a.avg ?? -1);
+  if (rankSort === "visits") list.sort((a, b) => b.visits - a.visits || byAvg(a, b) || b.last.localeCompare(a.last));
+  else list.sort((a, b) => byAvg(a, b) || b.ratings.length - a.ratings.length || b.visits - a.visits);
+  $("sortVisits").setAttribute("aria-pressed", String(rankSort === "visits"));
+  $("sortRating").setAttribute("aria-pressed", String(rankSort === "rating"));
+  const ol = $("rank"); ol.innerHTML = "";
+  if (!list.length) { ol.append(el("li", "empty", "식당을 기록하면 자주 간 곳과 별점 순위가 여기에 정리돼요.")); return; }
+  list.slice(0, 10).forEach((s, i) => {
+    const li = el("li");
+    const pl = el("div", "pl"); pl.append(el("b", null, s.name), el("span", null, `최근 ${fmtDate(s.last)}`));
+    const nums = el("div", "nums");
+    nums.append(el("b", null, `${s.visits}번`), el("span", null, s.avg == null ? "별점 없음" : `★ ${s.avg.toFixed(1)} (${s.ratings.length})`));
+    li.append(el("span", "no", String(i + 1)), pl, nums);
+    ol.append(li);
+  });
+}
+$("sortVisits").onclick = () => { rankSort = "visits"; renderRank(); };
+$("sortRating").onclick = () => { rankSort = "rating"; renderRank(); };
+
+// Random pick from past restaurants, weighted by rating, skipping anywhere visited in the last 2 weeks
+function recommend() {
+  const box = $("recBox"); box.innerHTML = ""; box.hidden = false;
+  const combos = new Map();
+  for (const h of picks()) {
+    const k = norm(h.place); if (!k) continue;
+    let c = combos.get(k);
+    if (!c) { c = { key: k, place: h.place, ratings: [], last: "" }; combos.set(k, c); }
+    if (h.rating >= 1) c.ratings.push(h.rating);
+    if (h.date > c.last) c.last = h.date;
+  }
+  if (!combos.size) { box.append(el("div", "rec-why", "아직 추천할 이력이 없어요. 몇 번 기록하면 그중에서 골라 드릴게요.")); return; }
+  const today = dayNum(todayStr());
+  const recentMenus = new Set(picks().filter(h => today - dayNum(h.date) <= DUP_DAYS).map(h => norm(h.place)));
+  let pool = [...combos.values()].filter(c => !recentMenus.has(c.key));
+  const fresh = pool.length > 0;
+  if (!fresh) pool = [...combos.values()];
+  if (pool.length > 1) pool = pool.filter(c => c.key !== lastRecKey);
+  const weight = c => c.ratings.length ? c.ratings.reduce((a, b) => a + b, 0) / c.ratings.length : 3;
+  let r = Math.random() * pool.reduce((a, c) => a + weight(c), 0), pick = pool[0];
+  for (const c of pool) { r -= weight(c); if (r <= 0) { pick = c; break; } }
+  lastRecKey = pick.key;
+  const avg = pick.ratings.length ? weight(pick) : null;
+  const main = el("div", "rec-main"); main.append(el("b", null, pick.place), " 어때요?");
+  const why = el("div", "rec-why", `마지막으로 ${fmtDate(pick.last)}에 갔어요` + (avg ? ` · 별점 ★ ${avg.toFixed(1)}` : "") +
+    (fresh ? "" : " · 2주 안에 안 간 식당이 없어서 전체 이력에서 골랐어요"));
+  const opts = el("div", "opts");
+  const use = el("button", "btn-ghost on", "이걸로 하기"); use.type = "button";
+  use.onclick = () => { $("pickPlace").value = pick.place; box.hidden = true; renderDup(); $("pickBtn").focus(); };
+  const again = el("button", "btn-ghost", "다른 거"); again.type = "button"; again.onclick = recommend;
+  const close = el("button", "btn-ghost", "닫기"); close.type = "button"; close.onclick = () => { box.hidden = true; };
+  opts.append(use, again, close);
+  box.append(main, why, opts);
+}
+$("recBtn").onclick = recommend;
+
+// Weekly picks (weather + nearby reviews), written into "recs/<date>" every Tuesday
+let recs = new Map();
+function renderAiRec(date) {
+  const box = $("aiRec"); box.innerHTML = "";
+  const r = recs.get(date);
+  if (!r || !Array.isArray(r.items) || !r.items.length) {
+    box.hidden = false;
+    box.append(el("div", "airec-foot", `${fmtDate(date)} 날씨에 맞춘 근처 식당 추천은 전날(화요일) 오후에 올라와요.`));
+    return;
+  }
+  box.hidden = false;
+  const head = el("h2", null, `${fmtDate(date)} 추천 식당`); head.style.margin = "0";
+  box.append(head);
+  if (r.weather) {
+    const wx = el("div", "wx");
+    if (r.weather.summary) wx.append(el("b", null, r.weather.summary));
+    if (r.weather.tempMin != null && r.weather.tempMax != null) wx.append(el("span", "temp", `${r.weather.tempMin}° / ${r.weather.tempMax}°`));
+    if (r.weather.note) wx.append(el("span", "wxs", r.weather.note));
+    box.append(wx);
+  }
+  const cards = el("div", "cards");
+  for (const it of r.items.slice(0, 3)) {
+    const c = el("div", "card");
+    const top = el("div", "ct-top"); top.append(el("span", "pn", it.place));
+    if (it.menu) top.append(el("span", "mn", it.menu));
+    c.append(top);
+    if (it.why) c.append(el("div", "why", it.why));
+    const src = [it.address, it.rating, it.source].filter(Boolean).join(" · ");
+    if (src) c.append(el("div", "src", src));
+    const acts = el("div", "acts");
+    const use = el("button", "btn-ghost on", "여기로 하기"); use.type = "button";
+    use.onclick = () => { $("pickPlace").value = it.place; renderDup(); $("pickBtn").focus(); };
+    const q = encodeURIComponent(it.place + " " + (it.area || "영등포"));
+    const nv = el("a", null, "네이버지도"); nv.href = "https://map.naver.com/p/search/" + q; nv.target = "_blank"; nv.rel = "noopener";
+    const gg = el("a", null, "구글맵"); gg.href = "https://www.google.com/maps/search/?api=1&query=" + q; gg.target = "_blank"; gg.rel = "noopener";
+    acts.append(use, nv, gg);
+    c.append(acts); cards.append(c);
+  }
+  box.append(cards);
+  if (r.basis) box.append(el("div", "airec-foot", r.basis));
+}
+
+// Team lunch schedule (every Wednesday), uploaded into the "schedule" collection
+let schedule = [], schedAll = false, dateTouched = false;
+function nextWed(from) {
+  const [y,m,d] = from.split("-").map(Number); const dt = new Date(Date.UTC(y, m-1, d));
+  dt.setUTCDate(dt.getUTCDate() + ((3 - dt.getUTCDay() + 7) % 7));
+  return dt.toISOString().slice(0, 10);
+}
+const pickedDates = () => new Set(picks().map(h => h.date));
+// Lunch dates from today on that have no record yet, in order
+function upcoming() {
+  const t = todayStr(), done = pickedDates();
+  const list = schedule.filter(s => s.status !== "off" && s.date >= t && !done.has(s.date)).map(s => s.date);
+  if (!list.length) { let d = nextWed(t); while (done.has(d)) d = nextWed(addDays(d, 1)); list.push(d); }
+  return list;
+}
+function addDays(s, n) { const [y,m,d] = s.split("-").map(Number); return new Date(Date.UTC(y, m-1, d + n)).toISOString().slice(0, 10); }
+
+function renderSchedule(up) {
+  const ul = $("sched"); ul.innerHTML = "";
+  const t = todayStr();
+  const byDate = new Map(picks().map(h => [h.date, h]));
+  const rows = schedule.filter(s => s.date >= addDays(t, -7));
+  if (!rows.length) { ul.append(el("li", "empty", "팀식 일정을 불러오는 중이에요.")); $("schedMore").hidden = true; return; }
+  const shown = schedAll ? rows : rows.slice(0, 6);
+  $("schedMore").hidden = rows.length <= 6;
+  $("schedMore").textContent = schedAll ? "접기" : `전체 보기 (${rows.length}주)`;
+  for (const s of shown) {
+    const p = byDate.get(s.date), off = s.status === "off";
+    const idx = up.indexOf(s.date);
+    const li = el("li", (off ? "off" : "") + (idx === 0 ? " target" : ""));
+    li.append(el("span", "d", fmtDate(s.date)));
+    const w = el("div", "w");
+    if (p) {
+      const a = el("div"); a.append(el("span", "who", p.picker), " 님이 골랐어요"); w.append(a, el("div", "sub", p.place));
+    } else if (off) {
+      const a = el("div", null, "쉬는 날"); w.append(a); if (s.note) w.append(el("div", "sub", s.note));
+    } else if (s.date < t) {
+      w.append(el("div", "sub", "기록 없음"));
+    } else if (idx >= 0) {
+      const a = el("div"); a.append(el("span", "who", nameAt(turn.current + idx)), " 님 차례");
+      if (idx === 0) a.append(el("span", "tag now", "이번"));
+      w.append(a); if (s.note) w.append(el("div", "sub", s.note));
+    }
+    const side = el("div", "side");
+    if (!p && s.date >= t) {
+      const b = el("button", "del", off ? "다시 팀식으로" : "쉬는 날로"); b.type = "button";
+      b.onclick = async () => { try { await db.collection("schedule").doc(s.date).update({ status: off ? "lunch" : "off" }); } catch { writeFail(); } };
+      side.append(b);
+    }
+    li.append(w, side); ul.append(li);
+  }
+}
+$("schedMore").onclick = () => { schedAll = !schedAll; render(); };
+$("pickDate").addEventListener("input", () => { dateTouched = true; });
+$("pickPlace").addEventListener("input", () => { dupConfirmed = false; renderDup(); });
+$("pickDate").addEventListener("input", () => { dupConfirmed = false; renderDup(); });
+
+function validOrder(o) { return Array.isArray(o) && o.length === 3 && MEMBERS.every(m => o.includes(m)); }
+const nameAt = i => turn.order[((i % 3) + 3) % 3];
+const now = () => nameAt(turn.current);
+const next = () => nameAt(turn.current + 1);
+
+function setMsg(text, err) { $("pickMsg").textContent = text; $("pickMsg").className = "msg" + (err ? " err" : ""); }
+const writeFail = () => setMsg("저장하지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.", true);
+
+async function saveTurn(patch) {
+  const data = { order: patch.order ?? turn.order, current: ((patch.current ?? turn.current) % 3 + 3) % 3, updatedAt: new Date().toISOString() };
+  await db.doc("state/turn").set(data);
+}
+async function addEvent(e) {
+  await db.collection("history").add({ ...e, createdAt: new Date().toISOString() });
+}
+
+function closePanels() { $("skipPanel").hidden = true; $("swapPanel").hidden = true; }
+
+function render() {
+  const todayPick = history.find(h => h.type === "pick" && h.date === todayStr());
+  const up = upcoming(), target = up[0];
+  const whenText = d => d === todayStr() ? "오늘" : `${fmtDate(d)}`;
+  if (!dateTouched) { $("pickDate").value = target; }
+  renderSchedule(up);
+  renderAiRec(target);
+  if (todayPick) {
+    $("turnLabel").textContent = "오늘 팀식 식당을 고른 사람";
+    $("pickerName").textContent = todayPick.picker;
+    $("nextLabel").textContent = `다음 팀식 ${fmtDate(target)}`;
+    $("nextName").textContent = now();
+    $("turnActions").hidden = true; closePanels();
+    const done = $("todayDone"); done.innerHTML = ""; done.hidden = false;
+    const box = el("div", "done");
+    box.append("오늘은 ", el("b", null, todayPick.place), "에서 먹기로 했어요.");
+    const more = el("button", "link", "다른 날짜 기록 추가"); more.type = "button";
+    more.onclick = () => { $("pickForm").hidden = false; done.hidden = true; $("pickDate").focus(); };
+    done.append(box, more);
+    $("pickForm").hidden = true;
+  } else {
+    $("turnLabel").textContent = target === todayStr() ? "오늘 팀식 식당 고를 사람" : `이번 팀식 ${fmtDate(target)} 식당 고를 사람`;
+    $("pickerName").textContent = now();
+    $("nextLabel").textContent = up[1] ? `다음 팀식 ${whenText(up[1])}` : "다음 차례";
+    $("nextName").textContent = next();
+    $("turnActions").hidden = false;
+    $("todayDone").hidden = true;
+    $("pickForm").hidden = false;
+  }
+  renderDup();
+  renderFormStars();
+  renderRank();
+  const pl = $("placeList"); pl.innerHTML = "";
+  for (const s of placeStats()) pl.append(new Option(s.name));
+
+  // Roster
+  const counts = Object.fromEntries(MEMBERS.map(m => [m, 0]));
+  for (const h of history) if (h.type === "pick" && h.picker in counts) counts[h.picker]++;
+  const roster = $("roster"); roster.innerHTML = "";
+  turn.order.forEach((name, i) => {
+    const isNow = i === turn.current, isNext = i === (turn.current + 1) % 3;
+    const li = el("li", "member" + (isNow ? " now" : ""));
+    li.append(el("span", "pos", `${i + 1}번`), el("span", "nm", name),
+      el("span", "st", isNow ? (todayPick ? "다음 차례" : "이번 차례") : isNext ? (todayPick ? "그다음" : "다음 차례") : "대기"),
+      el("span", "ct", `지금까지 ${counts[name]}번 고름`));
+    const mv = el("div", "mv");
+    const up = el("button", null, "←"); up.type = "button"; up.disabled = i === 0; up.setAttribute("aria-label", `${name} 순서 앞으로`);
+    const dn = el("button", null, "→"); dn.type = "button"; dn.disabled = i === 2; dn.setAttribute("aria-label", `${name} 순서 뒤로`);
+    up.onclick = () => move(i, i - 1); dn.onclick = () => move(i, i + 1);
+    mv.append(up, dn); li.append(mv);
+    roster.append(li);
+  });
+
+  // History
+  const log = $("log"); log.innerHTML = "";
+  if (!history.length) log.append(el("li", "empty", "아직 기록이 없어요. 위에서 식당을 적으면 여기에 쌓입니다."));
+  for (const h of history) {
+    const li = el("li", h.type === "pick" ? "" : "event");
+    li.append(el("span", "d", fmtDate(h.date)));
+    const w = el("div", "w");
+    if (h.type === "pick") {
+      w.append(el("div", "menu", h.place));
+      const meta = el("div", "meta"); meta.append(el("span", "chip", h.picker));
+      if (h.rating >= 1) meta.append(el("span", "star-txt", starText(h.rating)));
+      w.append(meta);
+      if (editingReview === h.id) {
+        const sr = el("div", "stars-row"); const st = el("span"); sr.append(el("span", null, "별점"), st);
+        const save = async v => { try { await db.collection("history").doc(h.id).update({ rating: v }); editingReview = null; render(); } catch { writeFail(); } };
+        makeStars(st, h.rating || 0, save, true);
+        const no = el("button", "link", "취소"); no.type = "button"; no.onclick = () => { editingReview = null; render(); };
+        sr.append(no); w.append(sr);
+      } else {
+        const ed = el("button", "link", h.rating ? "별점 수정" : "별점 매기기"); ed.type = "button"; ed.style.justifySelf = "start";
+        ed.onclick = () => { editingReview = h.id; render(); }; w.append(ed);
+      }
+    } else if (h.type === "skip") {
+      w.append(el("div", "menu", `${h.picker}님 차례 건너뜀 → ${h.to}님`));
+    } else if (h.type === "swap") {
+      w.append(el("div", "menu", `${h.picker}님 ↔ ${h.to}님 차례 바꿈`));
+    }
+    const side = el("div", "side");
+    const del = el("button", "del" + (pendingDelete === h.id ? " confirm" : ""), pendingDelete === h.id ? "삭제 확인" : "삭제"); del.type = "button";
+    del.onclick = async () => {
+      if (pendingDelete !== h.id) { pendingDelete = h.id; render(); setTimeout(() => { if (pendingDelete === h.id) { pendingDelete = null; render(); } }, 4000); return; }
+      pendingDelete = null;
+      try { await db.collection("history").doc(h.id).delete(); } catch { writeFail(); }
+    };
+    side.append(del); li.append(w, side);
+    log.append(li);
+  }
+}
+
+async function move(from, to) {
+  if (!db) return writeFail();
+  const order = [...turn.order]; const cur = order[turn.current];
+  [order[from], order[to]] = [order[to], order[from]];
+  try { await saveTurn({ order, current: order.indexOf(cur) }); } catch { writeFail(); }
+}
+
+$("skipBtn").onclick = () => {
+  $("swapPanel").hidden = true;
+  $("skipText").textContent = `오늘 ${now()}님 차례를 건너뛰고 ${next()}님이 고를까요? ${now()}님은 한 바퀴 뒤에 다시 차례가 와요.`;
+  $("skipPanel").hidden = !$("skipPanel").hidden;
+};
+$("skipNo").onclick = closePanels;
+$("skipYes").onclick = async () => {
+  if (!db) return writeFail();
+  const from = now(), to = next();
+  try { await saveTurn({ current: turn.current + 1 }); await addEvent({ type: "skip", date: todayStr(), picker: from, to }); closePanels(); setMsg(`${from}님 차례를 건너뛰었어요.`); }
+  catch { writeFail(); }
+};
+
+$("swapBtn").onclick = () => {
+  $("skipPanel").hidden = true;
+  $("swapText").textContent = `${now()}님과 차례를 바꿀 사람을 고르세요.`;
+  const opts = $("swapOpts"); opts.innerHTML = "";
+  turn.order.forEach((name, i) => {
+    if (i === turn.current) return;
+    const b = el("button", "btn-ghost on", name); b.type = "button";
+    b.onclick = async () => {
+      if (!db) return writeFail();
+      const from = now(); const order = [...turn.order];
+      [order[turn.current], order[i]] = [order[i], order[turn.current]];
+      try { await saveTurn({ order }); await addEvent({ type: "swap", date: todayStr(), picker: from, to: name }); closePanels(); setMsg(`${name}님이 오늘 고르고, ${from}님은 ${name}님 자리로 갔어요.`); }
+      catch { writeFail(); }
+    };
+    opts.append(b);
+  });
+  const c = el("button", "btn-ghost", "취소"); c.type = "button"; c.onclick = closePanels; opts.append(c);
+  $("swapPanel").hidden = !$("swapPanel").hidden;
+};
+
+$("pickForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  if (!db) return writeFail();
+  const place = $("pickPlace").value.trim(), date = $("pickDate").value;
+  if (!place || !date) return;
+  if (findDup(place, date) && !dupConfirmed) { dupConfirmed = true; renderDup(); $("pickBtn").focus(); return; }
+  const picker = now();
+  $("pickBtn").disabled = true;
+  try {
+    await addEvent({ type: "pick", date, picker, place, rating: formRating });
+    await saveTurn({ current: turn.current + 1 });
+    $("pickPlace").value = ""; dateTouched = false;
+    formRating = 0; dupConfirmed = false; $("recBox").hidden = true;
+    setMsg(`기록했어요. 다음은 ${nameAt(turn.current + 1)}님 차례예요.`);
+  } catch { writeFail(); }
+  finally { $("pickBtn").disabled = false; }
+});
+
+render();
+
+// ---- Firebase (Firestore) ----
+// Data lives at lunches/{room}/{state|schedule|history|recs}. The room code in the link is the key to the team's board.
+const FIREBASE_SDK = "https://www.gstatic.com/firebasejs/10.12.2";
+const ROOM_KEY = "lunch.room";
+const ROOM_RE = /^[a-z0-9]{20}$/;
+const SEED_ORDER = ["한체리", "김해리", "김JK"], SEED_CURRENT = 1;
+const SEED_FROM = "2026-10-28", SEED_TO = "2027-06-30", SEED_OFF = { "2027-05-05": "어린이날" };
+
+const storageGet = k => { try { return localStorage.getItem(k); } catch { return null; } };
+const storageSet = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+const newCode = () => { const a = "abcdefghijklmnopqrstuvwxyz0123456789", b = crypto.getRandomValues(new Uint8Array(20)); return [...b].map(x => a[x % 36]).join(""); };
+const parseCode = v => { v = (v || "").trim(); const m = v.match(/[?&]room=([a-z0-9]{20})/); if (m) return m[1]; return ROOM_RE.test(v) ? v : null; };
+const shareUrl = room => `${location.origin}${location.pathname}?room=${room}`;
+
+function showStatus(text) { $("status").hidden = false; $("status").textContent = text; }
+function explain(e) {
+  if (e && e.code === "permission-denied") return "Firebase 규칙에 점심 당번표(lunches) 허용이 필요해요. lunch/README.md의 규칙을 게시해 주세요.";
+  return "기록을 불러오지 못했어요. 인터넷 연결을 확인하고 새로고침해 주세요.";
+}
+
+async function makeDb(room) {
+  const config = (await import("./firebase-config.js")).default;
+  if (!config) throw new Error("no-config");
+  const [{ initializeApp, getApps }, fs] = await Promise.all([
+    import(`${FIREBASE_SDK}/firebase-app.js`),
+    import(`${FIREBASE_SDK}/firebase-firestore.js`)
+  ]);
+  const app = getApps()[0] || initializeApp(config);
+  const f = fs.getFirestore(app);
+  const base = `lunches/${room}`;
+  const wrap = s => ({ id: s.id, exists: s.exists(), data: () => s.data() });
+  const docRef = p => {
+    const r = fs.doc(f, `${base}/${p}`);
+    return {
+      get: async () => wrap(await fs.getDoc(r)),
+      set: d => fs.setDoc(r, d),
+      update: d => fs.updateDoc(r, d),
+      delete: () => fs.deleteDoc(r),
+      onSnapshot: (next, err) => fs.onSnapshot(r, s => next(wrap(s)), err)
+    };
+  };
+  const colRef = p => {
+    const c = fs.collection(f, `${base}/${p}`);
+    return {
+      add: d => fs.addDoc(c, d),
+      doc: id => docRef(`${p}/${id}`),
+      onSnapshot: (next, err) => fs.onSnapshot(c, qs => next({ docs: qs.docs.map(wrap) }), err)
+    };
+  };
+  // First open of an empty board: put in the rotation and every Wednesday of the season
+  async function seedIfEmpty() {
+    const turnRef = fs.doc(f, `${base}/state/turn`);
+    if ((await fs.getDoc(turnRef)).exists()) return;
+    const batch = fs.writeBatch(f);
+    batch.set(turnRef, { order: SEED_ORDER, current: SEED_CURRENT, updatedAt: new Date().toISOString() });
+    for (let d = SEED_FROM; d <= SEED_TO; d = addDays(d, 7)) {
+      batch.set(fs.doc(f, `${base}/schedule/${d}`), SEED_OFF[d] ? { date: d, status: "off", note: SEED_OFF[d] } : { date: d, status: "lunch" });
+    }
+    await batch.commit();
+  }
+  return { doc: docRef, collection: colRef, seedIfEmpty };
+}
+
+async function openRoom(room) {
+  storageSet(ROOM_KEY, room);
+  if (new URLSearchParams(location.search).get("room") !== room) history_replace(room);
+  $("join").hidden = true; $("app").hidden = false; $("shareBtn").hidden = false;
+  showStatus("팀 기록을 불러오는 중…");
+  try {
+    db = await makeDb(room);
+    await db.seedIfEmpty();
+  } catch (e) { db = null; showStatus(explain(e)); return; }
+  $("status").hidden = true;
+  const onErr = e => showStatus(explain(e));
+  db.doc("state/turn").onSnapshot(snap => {
+    const d = snap.exists ? snap.data() : null;
+    turnExists = !!d;
+    if (d && validOrder(d.order) && Number.isInteger(d.current)) turn = { order: [...d.order], current: ((d.current % 3) + 3) % 3 };
+    else turn = { order: [...MEMBERS], current: 0 };
+    render();
+  }, onErr);
+  db.collection("recs").onSnapshot(snap => {
+    recs = new Map(snap.docs.map(d => [d.id, d.data()]));
+    render();
+  }, onErr);
+  db.collection("schedule").onSnapshot(snap => {
+    schedule = snap.docs.map(d => d.data()).filter(s => typeof s.date === "string").sort((a, b) => a.date.localeCompare(b.date));
+    render();
+  }, onErr);
+  db.collection("history").onSnapshot(snap => {
+    history = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .filter(h => typeof h.date === "string")
+      .sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt || "").localeCompare(a.createdAt || ""));
+    render();
+  }, onErr);
+}
+function history_replace(room) { try { window.history.replaceState(null, "", shareUrl(room)); } catch {} }
+
+$("shareBtn").onclick = async () => {
+  const url = shareUrl(storageGet(ROOM_KEY) || "");
+  try { await navigator.clipboard.writeText(url); setMsg("링크를 복사했어요. 팀원에게 보내 주세요."); }
+  catch { setMsg(`이 링크를 팀원에게 보내 주세요: ${url}`); }
+};
+$("joinForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const room = parseCode($("joinCode").value);
+  if (!room) { $("joinMsg").textContent = "링크나 코드가 맞지 않아요. 받은 링크를 그대로 붙여 넣어 주세요."; $("joinMsg").className = "msg err"; return; }
+  openRoom(room);
+});
+$("newRoom").onclick = () => openRoom(newCode());
+
+{
+  const room = parseCode(new URLSearchParams(location.search).get("room") || "") || parseCode(storageGet(ROOM_KEY));
+  if (room) openRoom(room);
+  else { $("status").hidden = true; $("join").hidden = false; }
+}
+</script>
+</body>
+</html>
