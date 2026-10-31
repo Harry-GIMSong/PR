@@ -1710,7 +1710,7 @@
           <label class="lbl">결제수단 <button class="link" data-addpay-in-form="1" type="button">＋ 카드 등록</button></label>
           <div class="chips" id="fPay"></div>
           <div class="inline-row" id="fInstRow" ${isFixed ? "hidden" : ""}>
-            <select id="fInst">${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 18, 24, 36].map(n => `<option value="${n}">${n === 1 ? "일시불" : `${n}개월 할부`}</option>`).join("")}</select>
+            <select id="fInst">${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 36].map(n => `<option value="${n}">${n === 1 ? "일시불" : `${n}개월 할부`}</option>`).join("")}</select>
           </div>
           <div class="bill-hint" id="fBill"></div>
         </div>
