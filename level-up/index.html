@@ -586,7 +586,8 @@ function refresh(notify = true) {
   const prev = C;
   C = derive();
   if (notify && prev) {
-    if (C.level > prev.level) queue.push({ big: "🎺", title: "레벨이 올랐다!", body: `빠밤빠바밤~\nLv.${prev.level} → Lv.${C.level}\n능력치 포인트 +${(C.level - prev.level) * 3} (상태창에서 분배)` });
+    // 이미 알려 준 레벨(seenLevel)보다 높아졌을 때만. 앱을 연 직후 파티 협주 경험치가 더해지는 건 알리지 않는다
+    if (C.level > prev.level && C.level > (S.seenLevel || 0) && !party.quiet) queue.push({ big: "🎺", title: "레벨이 올랐다!", body: `빠밤빠바밤~\nLv.${prev.level} → Lv.${C.level}\n능력치 포인트 +${(C.level - prev.level) * 3} (상태창에서 분배)` });
     for (const i in C.bosses) if (!prev.bosses[i]) {
       const sh = SHADOWS[i];
       queue.push({ big: sh.icon, title: `${sh.name} 처치!`, body: `${RANKS[i].id}랭크 레이드 클리어 · 경험치 +100\n전리품: [${RARITY[sh.loot.r].name}] ${sh.loot.icon} ${sh.loot.name}` });
@@ -596,6 +597,7 @@ function refresh(notify = true) {
       if (x.done && p && !p.done) queue.push({ big: x.loot ? x.loot.icon : "✅", title: x.rest ? "여관에서 푹 쉬었다" : x.full ? "올클!" : "숙제 끝!", body: `Day ${x.d} 클리어 · 경험치 +${C.xp - prev.xp}\n🎁 [${RARITY[x.loot.r].name}] ${x.loot.name} 획득!${x.loot.r >= 4 ? "\n✨ 빛기둥이 솟았다!" : ""}${x.duo ? `\n🎶 협주 성공! 파티 보너스 +${DUO_XP} XP` : ""}` });
     }
   }
+  S.seenLevel = Math.max(S.seenLevel || 0, C.level);
   for (const a of ACH()) {
     if (S.ach[a.id]) continue;
     const ev = a.fn(C);
@@ -1090,7 +1092,9 @@ async function connectParty() {
       if (mine && mine.save && (mine.savedAt || 0) > (S.savedAt || 0)) adoptSave(mine.save, S.party);
       const first = !party.synced;
       party.synced = true;
+      party.quiet = first;
       onPartyUpdate();
+      party.quiet = false;
       setPartyStatus("live");
       if (first) publishSoon(0);
     }, onPartyError);
