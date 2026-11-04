@@ -406,24 +406,64 @@ $("recBtn").onclick = recommend;
 
 // Weekly picks (weather + nearby reviews), written into "recs/<date>" every Tuesday
 let recs = new Map();
+// Live weather at 11:00 on the lunch day, near 버드나루로 13 (Open-Meteo, no key)
+const WX_LAT = 37.5197, WX_LON = 126.9076, WX_HOUR = "11:00";
+const WX_TEXT = { 0: "맑음", 1: "대체로 맑음", 2: "구름 조금", 3: "흐림", 45: "안개", 48: "안개", 51: "이슬비", 53: "이슬비", 55: "이슬비",
+  61: "비", 63: "비", 65: "강한 비", 66: "어는 비", 67: "어는 비", 71: "눈", 73: "눈", 75: "많은 눈", 77: "싸락눈",
+  80: "소나기", 81: "소나기", 82: "강한 소나기", 85: "눈 소나기", 86: "눈 소나기", 95: "뇌우", 96: "뇌우", 99: "뇌우" };
+const wx11 = new Map(); // date -> {temp, feels, pop, code, wind} | "loading" | "none"
+async function loadWx11(date) {
+  if (wx11.has(date)) return;
+  wx11.set(date, "loading");
+  try {
+    const q = new URLSearchParams({ latitude: WX_LAT, longitude: WX_LON, timezone: "Asia/Seoul", wind_speed_unit: "ms",
+      hourly: "temperature_2m,apparent_temperature,precipitation_probability,weather_code,wind_speed_10m", start_date: date, end_date: date });
+    const res = await fetch("https://api.open-meteo.com/v1/forecast?" + q);
+    if (!res.ok) throw new Error(res.status);
+    const h = (await res.json()).hourly, i = h.time.indexOf(`${date}T${WX_HOUR}`);
+    if (i < 0 || h.temperature_2m[i] == null) throw new Error("no-hour");
+    wx11.set(date, { temp: Math.round(h.temperature_2m[i]), feels: Math.round(h.apparent_temperature[i]), pop: h.precipitation_probability[i],
+      code: h.weather_code[i], wind: Math.round(h.wind_speed_10m[i]) });
+  } catch { wx11.set(date, "none"); }
+  render();
+}
+function wxLine(date, stored) {
+  const w = wx11.get(date);
+  const wx = el("div", "wx");
+  if (w && typeof w === "object") {
+    wx.append(el("b", null, `11시 기준 ${WX_TEXT[w.code] || "날씨"}`), el("span", "temp", `${w.temp}°`),
+      el("span", "wxs", `체감 ${w.feels}°` + (w.pop != null ? ` · 강수확률 ${w.pop}%` : "") + ` · 바람 ${w.wind}m/s`));
+    return wx;
+  }
+  if (stored && stored.temp11 != null) {
+    wx.append(el("b", null, `11시 기준 ${stored.summary || ""}`.trim()), el("span", "temp", `${stored.temp11}°`));
+    if (stored.note) wx.append(el("span", "wxs", stored.note));
+    return wx;
+  }
+  if (w === "loading") { wx.append(el("span", "wxs", "11시 날씨를 불러오는 중…")); return wx; }
+  if (stored) {
+    if (stored.summary) wx.append(el("b", null, stored.summary));
+    if (stored.tempMin != null && stored.tempMax != null) wx.append(el("span", "temp", `${stored.tempMin}° / ${stored.tempMax}°`));
+    if (stored.note) wx.append(el("span", "wxs", stored.note));
+    return wx;
+  }
+  wx.append(el("span", "wxs", "11시 예보는 날짜가 가까워지면 나와요."));
+  return wx;
+}
+
 function renderAiRec(date) {
   const box = $("aiRec"); box.innerHTML = "";
+  loadWx11(date);
   const r = recs.get(date);
+  box.hidden = false;
   if (!r || !Array.isArray(r.items) || !r.items.length) {
-    box.hidden = false;
-    box.append(el("div", "airec-foot", `${fmtDate(date)} 날씨에 맞춘 근처 식당 추천은 전날(화요일) 오후에 올라와요.`));
+    box.append(wxLine(date, null));
+    box.append(el("div", "airec-foot", `${fmtDate(date)} 날씨에 맞춘 근처 식당 추천은 전날(화요일) 오후에 올라오고, 당일 오전에 11시 날씨로 한 번 더 맞춰요.`));
     return;
   }
-  box.hidden = false;
   const head = el("h2", null, `${fmtDate(date)} 추천 식당`); head.style.margin = "0";
   box.append(head);
-  if (r.weather) {
-    const wx = el("div", "wx");
-    if (r.weather.summary) wx.append(el("b", null, r.weather.summary));
-    if (r.weather.tempMin != null && r.weather.tempMax != null) wx.append(el("span", "temp", `${r.weather.tempMin}° / ${r.weather.tempMax}°`));
-    if (r.weather.note) wx.append(el("span", "wxs", r.weather.note));
-    box.append(wx);
-  }
+  box.append(wxLine(date, r.weather));
   const cards = el("div", "cards");
   for (const it of r.items.slice(0, 3)) {
     const c = el("div", "card");
