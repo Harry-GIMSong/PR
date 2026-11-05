@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>정보보안 현황 진단 매트릭스</title>
+<meta name="description" content="NIST CSF 2.0 × McCumber 큐브 × CMMI/SSE-CMM 성숙도 모델에 기초한 정보보안 현황 진단 매트릭스 (ISO/IEC 27001:2022, ISMS-P 매핑)" />
+<style>
+:root{
+  --bg:#f5f7fb; --card:#ffffff; --text:#1f2937; --sub:#6b7280; --line:#e5e7eb;
+  --primary:#2563eb; --primary-d:#1e40af; --soft:#eef2ff; --warn:#b45309; --bad:#b91c1c; --good:#047857;
+  --l0:#f3f4f6; --l1:#dbeafe; --l2:#bfdbfe; --l3:#93c5fd; --l4:#3b82f6; --l5:#1d4ed8;
+  --l0t:#6b7280; --l1t:#1e3a8a; --l2t:#1e3a8a; --l3t:#1e3a8a; --l4t:#ffffff; --l5t:#ffffff;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f172a; --card:#1e293b; --text:#e5e7eb; --sub:#94a3b8; --line:#334155;
+    --primary:#60a5fa; --primary-d:#1e3a8a; --soft:#1e3a5f; --warn:#fbbf24; --bad:#f87171; --good:#34d399;
+    --l0:#273449; --l1:#1e3a5f; --l2:#1e4b8a; --l3:#2563eb; --l4:#3b82f6; --l5:#93c5fd;
+    --l0t:#94a3b8; --l1t:#dbeafe; --l2t:#dbeafe; --l3t:#ffffff; --l4t:#ffffff; --l5t:#0f172a;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f172a; --card:#1e293b; --text:#e5e7eb; --sub:#94a3b8; --line:#334155;
+  --primary:#60a5fa; --primary-d:#1e3a8a; --soft:#1e3a5f; --warn:#fbbf24; --bad:#f87171; --good:#34d399;
+  --l0:#273449; --l1:#1e3a5f; --l2:#1e4b8a; --l3:#2563eb; --l4:#3b82f6; --l5:#93c5fd;
+  --l0t:#94a3b8; --l1t:#dbeafe; --l2t:#dbeafe; --l3t:#ffffff; --l4t:#ffffff; --l5t:#0f172a;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic","Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.55}
+.header{background:linear-gradient(90deg,#2563eb,#1e40af);color:#fff;padding:26px 16px 20px;text-align:center}
+.header h1{margin:0 0 6px;font-size:1.5rem}
+.header p{margin:0;opacity:.9;font-size:.92rem}
+.wrap{max-width:1180px;margin:0 auto;padding:16px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 16px;position:sticky;top:0;background:var(--bg);padding:8px 0;z-index:5}
+.tab{border:1px solid var(--line);background:var(--card);color:var(--text);padding:8px 14px;border-radius:999px;cursor:pointer;font-size:.92rem}
+.tab.on{background:var(--primary);border-color:var(--primary);color:#fff}
+.panel{display:none}.panel.on{display:block}
+.box{background:var(--card);border-radius:14px;padding:16px;box-shadow:0 4px 16px rgba(0,0,0,.06);margin-bottom:16px;border:1px solid var(--line)}
+.box h2{margin:0 0 10px;font-size:1.1rem}
+.box h3{margin:16px 0 8px;font-size:1rem}
+.sub{color:var(--sub);font-size:.88rem}
+.meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:.85rem;color:var(--sub)}
+input,select{font:inherit;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text)}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+button.b{font:inherit;font-size:.88rem;padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--text);cursor:pointer}
+button.b.p{background:var(--primary);border-color:var(--primary);color:#fff}
+button.b:hover{filter:brightness(.97)}
+.legend{display:flex;gap:6px;flex-wrap:wrap;font-size:.8rem;margin-top:8px}
+.legend span{padding:3px 8px;border-radius:6px}
+/* matrix */
+.matrix{display:grid;grid-template-columns:150px repeat(3,minmax(0,1fr)) 70px;gap:8px}
+.mh{font-weight:700;font-size:.88rem;padding:8px;text-align:center;background:var(--soft);border-radius:10px}
+.mh small{display:block;font-weight:400;color:var(--sub);font-size:.75rem}
+.rh{background:var(--soft);border-radius:10px;padding:10px;font-size:.85rem}
+.rh b{display:block;font-size:.95rem}
+.avg{display:flex;align-items:center;justify-content:center;border-radius:10px;font-weight:700;font-size:1.05rem}
+.cell{border-radius:10px;padding:10px;border:1px solid var(--line);display:flex;flex-direction:column;gap:6px;transition:background .2s}
+.cell .id{font-size:.72rem;font-weight:700;opacity:.8}
+.cell .t{font-weight:700;font-size:.9rem}
+.cell .q{font-size:.8rem}
+.seg{display:flex;gap:3px;margin-top:auto}
+.seg button{flex:1;font:inherit;font-size:.8rem;padding:5px 0;border-radius:6px;border:1px solid var(--line);background:var(--card);color:var(--text);cursor:pointer}
+.seg button.on{background:var(--primary);color:#fff;border-color:var(--primary);font-weight:700}
+.seg button.na{flex:1.3}
+details{font-size:.78rem}
+details summary{cursor:pointer;color:inherit;opacity:.85}
+details ul{margin:4px 0 0;padding-left:16px}
+.chips{display:flex;gap:4px;flex-wrap:wrap}
+.chip{font-size:.68rem;padding:1px 6px;border-radius:5px;background:rgba(127,127,127,.15)}
+.mob-label{display:none}
+@media (max-width:860px){
+  .matrix{grid-template-columns:1fr}
+  .mh,.matrix .corner,.matrix .avgh{display:none}
+  .rh{margin-top:10px}
+  .avg{justify-content:flex-start;padding:6px 10px}
+  .mob-label{display:inline;font-size:.72rem;font-weight:400}
+}
+/* small matrix */
+.mc{display:grid;grid-template-columns:120px repeat(3,minmax(0,1fr));gap:8px}
+@media (max-width:640px){.mc{grid-template-columns:1fr}.mc .mh,.mc .corner{display:none}}
+/* results */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.kpi{background:var(--soft);border-radius:12px;padding:12px}
+.kpi .v{font-size:1.6rem;font-weight:800}
+.kpi .l{font-size:.8rem;color:var(--sub)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+.bar{display:grid;grid-template-columns:110px 1fr 46px;gap:8px;align-items:center;font-size:.85rem;margin:6px 0}
+.track{height:14px;background:var(--l0);border-radius:7px;position:relative;overflow:hidden}
+.fill{height:100%;background:var(--primary);border-radius:7px}
+.tgt{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--bad)}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th,td{border-bottom:1px solid var(--line);padding:7px 6px;text-align:left;vertical-align:top}
+th{background:var(--soft);font-weight:700;white-space:nowrap}
+#gapTable td:nth-child(2),#gapTable td:nth-child(4){white-space:nowrap}
+.tw{overflow-x:auto}
+.hm{display:grid;grid-template-columns:70px repeat(3,1fr);gap:4px;font-size:.8rem}
+.hm div{padding:8px 4px;text-align:center;border-radius:6px}
+.hm .h{background:transparent;font-weight:700;color:var(--sub)}
+svg text{fill:var(--text)}
+.ref li{margin-bottom:8px;font-size:.88rem}
+.ref .why{display:block;color:var(--sub);font-size:.8rem}
+.note{border-left:4px solid var(--primary);background:var(--soft);padding:10px 12px;border-radius:8px;font-size:.86rem}
+.back{color:#fff;opacity:.85;font-size:.85rem;text-decoration:none}
+@media print{
+  .tabs,.btns,.header .back{display:none}
+  .panel{display:block!important;break-inside:avoid}
+  body{background:#fff}
+  .box{box-shadow:none}
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <a class="back" href="../index.html">← CPPG 학습 시스템</a>
+  <h1>🛡️ 정보보안 현황 진단 매트릭스</h1>
+  <p>NIST CSF 2.0 기능 × McCumber 보호대책 차원 × CMMI/SSE-CMM 성숙도(0~5) · ISO/IEC 27001:2022 · ISMS-P 매핑</p>
+</div>
+
+<div class="wrap">
+  <div class="tabs" role="tablist">
+    <button class="tab on" data-tab="diag">① 진단 매트릭스</button>
+    <button class="tab" data-tab="cube">② 보조 매트릭스 (McCumber)</button>
+    <button class="tab" data-tab="result">③ 결과·갭 분석</button>
+    <button class="tab" data-tab="method">④ 성숙도 기준·방법론</button>
+    <button class="tab" data-tab="ref">⑤ 학술 근거</button>
+  </div>
+
+  <!-- ① 진단 -->
+  <section class="panel on" id="p-diag">
+    <div class="box">
+      <h2>진단 개요</h2>
+      <div class="meta">
+        <label class="f">조직/부서명<input id="org" placeholder="예: OO공사 정보보호팀" /></label>
+        <label class="f">진단일<input id="date" type="date" /></label>
+        <label class="f">진단자<input id="assessor" placeholder="이름" /></label>
+        <label class="f">목표 성숙도 (Target)
+          <select id="target">
+            <option value="2">2 — 계획·추적</option>
+            <option value="3" selected>3 — 정의·표준화 (권장 기준선)</option>
+            <option value="4">4 — 정량 관리</option>
+            <option value="5">5 — 지속 개선</option>
+          </select>
+        </label>
+      </div>
+      <p class="sub" style="margin-top:12px">각 셀은 <b>CSF 2.0 기능(행)</b>과 <b>McCumber 큐브의 보호대책 차원(열: 기술 / 정책·절차 / 인적·교육)</b>의 교차점입니다. 셀마다 진단 질문과 증적 예시를 확인한 뒤, <b>④ 성숙도 기준</b>에 따라 0~5 수준을 선택하세요. 해당 없으면 N/A.</p>
+      <div class="legend" id="legend"></div>
+      <div class="btns">
+        <button class="b" id="btnCsv">CSV 내보내기</button>
+        <button class="b" id="btnJson">JSON 저장</button>
+        <button class="b" id="btnLoad">JSON 불러오기</button>
+        <button class="b" id="btnSample">예시 데이터</button>
+        <button class="b" id="btnPrint">인쇄/PDF</button>
+        <button class="b" id="btnReset">초기화</button>
+        <input type="file" id="file" accept="application/json" hidden />
+      </div>
+    </div>
+    <div class="box">
+      <div class="matrix" id="matrix"></div>
+    </div>
+  </section>
+
+  <!-- ② McCumber -->
+  <section class="panel" id="p-cube">
+    <div class="box">
+      <h2>보조 매트릭스: 보안 목표 × 정보 상태</h2>
+      <p class="sub">McCumber(1991) 큐브의 나머지 두 축입니다. 정보가 <b>전송·저장·처리</b>되는 각 상태에서 <b>기밀성·무결성·가용성</b>이 얼마나 보장되는지 0~5로 평가합니다. ① 매트릭스가 “무엇을 하는가(기능·대책)”를 본다면, 이 매트릭스는 “어떤 상태의 정보가 비어 있는가(커버리지)”를 봅니다.</p>
+      <div class="mc" id="cube"></div>
+    </div>
+  </section>
+
+  <!-- ③ 결과 -->
+  <section class="panel" id="p-result">
+    <div class="box">
+      <h2>종합 결과 <span class="sub" id="resMeta"></span></h2>
+      <div class="kpis" id="kpis"></div>
+    </div>
+    <div class="grid2">
+      <div class="box">
+        <h2>CSF 기능별 성숙도 (레이더)</h2>
+        <div id="radar"></div>
+        <p class="sub">파란 영역 = 현재 수준, 빨간 점선 = 목표 수준</p>
+      </div>
+      <div class="box">
+        <h2>보호대책 차원별 균형</h2>
+        <div id="dimBars"></div>
+        <h3>히트맵 (기능 × 차원)</h3>
+        <div class="hm" id="heat"></div>
+        <p class="sub" id="balanceNote"></p>
+      </div>
+    </div>
+    <div class="box">
+      <h2>갭 분석 · 개선 우선순위</h2>
+      <p class="sub">우선순위 점수 = (목표 − 현재) × 기능 가중치. 가중치는 NIST SP 800-30의 영향도 관점에서 조직이 조정할 수 있으며, 기본값은 보호·탐지·대응 1.2, 그 외 1.0입니다.</p>
+      <div class="meta" id="weights" style="margin:10px 0"></div>
+      <div class="tw"><table id="gapTable"></table></div>
+    </div>
+    <div class="box">
+      <h2>정보 상태 커버리지 (McCumber)</h2>
+      <div class="hm" id="heat2"></div>
+    </div>
+  </section>
+
+  <!-- ④ 방법론 -->
+  <section class="panel" id="p-method">
+    <div class="box">
+      <h2>성숙도 수준 정의 (0~5)</h2>
+      <p class="sub">CMMI(SEI, 2010)의 단계 개념과 ISO/IEC 21827(SSE-CMM)의 능력 수준(Capability Level)을 정보보안 진단용으로 재서술했습니다. 판정은 “문서가 있는가”가 아니라 <b>증적으로 확인되는가</b>를 기준으로 합니다.</p>
+      <div class="tw"><table id="levelTable"></table></div>
+    </div>
+    <div class="box">
+      <h2>매트릭스 구성 논리</h2>
+      <div class="tw"><table>
+        <tr><th>축</th><th>구성</th><th>근거</th><th>역할</th></tr>
+        <tr><td>행 (기능)</td><td>거버넌스·식별·보호·탐지·대응·복구</td><td>NIST CSF 2.0 (2024)</td><td>보안 활동의 생애주기 전체를 빠짐없이 덮음</td></tr>
+        <tr><td>열 (보호대책)</td><td>기술 / 정책·절차 / 인적·교육</td><td>McCumber(1991) 큐브의 Safeguards 축</td><td>기술 편중을 드러냄. von Solms(2000), Dhillon &amp; Backhouse(2001)가 지적한 관리·사회조직적 측면을 독립 차원으로 측정</td></tr>
+        <tr><td>값 (수준)</td><td>0~5 성숙도</td><td>CMMI, SSE-CMM(ISO/IEC 21827)</td><td>“있다/없다”가 아닌 단계적 개선 경로 제시</td></tr>
+        <tr><td>보조 축</td><td>C·I·A × 전송·저장·처리</td><td>McCumber(1991)</td><td>정보 상태별 사각지대 확인</td></tr>
+        <tr><td>매핑</td><td>ISO/IEC 27001:2022 부속서 A, ISMS-P 인증기준</td><td>국제·국내 표준</td><td>진단 결과를 인증 준비·통제 항목으로 바로 연결</td></tr>
+      </table></div>
+    </div>
+    <div class="box">
+      <h2>진단 절차 (권장)</h2>
+      <ol style="font-size:.9rem;padding-left:20px">
+        <li><b>범위 정의</b> — 대상 조직·시스템·개인정보 처리 흐름을 확정 (ISMS-P 1.1.4 범위 설정).</li>
+        <li><b>증적 수집</b> — 정책서, 로그, 점검 결과, 교육 이수 기록 등. 각 셀의 “증적 예시” 참고.</li>
+        <li><b>인터뷰·관찰</b> — 문서와 실제 운영의 차이 확인. 자기평가 편향을 줄이려면 2인 이상 교차 평가.</li>
+        <li><b>수준 판정</b> — 셀별 0~5 선택. 경계 판단이 어려우면 <b>낮은 쪽</b>을 택하고 비고로 남김(보수적 판정).</li>
+        <li><b>갭 분석</b> — 목표 대비 차이와 기능 가중치로 우선순위 산정 (③ 탭).</li>
+        <li><b>개선 계획</b> — 우선순위 상위 항목에 대해 담당·기한·예산 지정. 투자 규모는 Gordon &amp; Loeb(2002) 모형상 <b>기대 손실의 약 1/e(≈36.8%)</b>를 넘지 않는 것이 합리적이라는 점을 참고.</li>
+        <li><b>재진단</b> — 6~12개월 주기로 반복해 추세를 관리 (CSF 2.0의 Current → Target Profile 개념).</li>
+      </ol>
+    </div>
+    <div class="note">⚠️ 이 매트릭스는 위 표준·연구를 <b>결합해 구성한 진단 도구</b>로, 단일 논문이 제안한 공인 척도는 아닙니다. 점수는 조직 내부 비교·추세 관리용이며, 인증 심사(ISMS-P 등)의 적합/부적합 판정을 대체하지 않습니다. 학술 연구에 사용할 경우 문항의 신뢰도(Cronbach’s α 등)와 타당도 검증을 별도로 거쳐야 합니다.</div>
+  </section>
+
+  <!-- ⑤ 참고문헌 -->
+  <section class="panel" id="p-ref">
+    <div class="box">
+      <h2>학술 근거 및 표준</h2>
+      <h3>이론·모형 (학술 논문)</h3>
+      <ol class="ref">
+        <li>McCumber, J. (1991). Information systems security: A comprehensive model. <i>Proceedings of the 14th National Computer Security Conference</i>, Baltimore, MD.
+          <span class="why">→ 보호대책 차원(기술/정책·절차/교육·훈련·인식)과 정보 상태(전송/저장/처리) × 보안 목표(C·I·A) 축의 근거.</span></li>
+        <li>von Solms, B. (2000). Information security — The third wave? <i>Computers &amp; Security</i>, 19(7), 615–620.
+          <span class="why">→ 기술 → 관리 → 제도화(거버넌스·측정)로 진화. 거버넌스 행과 수준 4(정량 관리)의 근거.</span></li>
+        <li>Dhillon, G., &amp; Backhouse, J. (2001). Current directions in information systems security research: Towards socio-organizational perspectives. <i>Information Systems Journal</i>, 11(2), 127–153.
+          <span class="why">→ 기술 중심 진단의 한계와 사회·조직적 관점의 필요성. 정책·인적 열을 독립 측정하는 이유.</span></li>
+        <li>Siponen, M. T. (2005). An analysis of the traditional IS security approaches: Implications for research and practice. <i>European Journal of Information Systems</i>, 14(3), 303–315.
+          <span class="why">→ 체크리스트·표준 중심 접근의 한계 비판. 단순 준수 여부가 아닌 성숙도 단계로 판정하는 근거.</span></li>
+        <li>Bulgurcu, B., Cavusoglu, H., &amp; Benbasat, I. (2010). Information security policy compliance: An empirical study of rationality-based beliefs and information security awareness. <i>MIS Quarterly</i>, 34(3), 523–548.
+          <span class="why">→ 보안 인식이 정책 준수 의도에 영향을 준다는 실증. 인적·교육 열 문항의 근거.</span></li>
+        <li>Da Veiga, A., &amp; Eloff, J. H. P. (2010). A framework and assessment instrument for information security culture. <i>Computers &amp; Security</i>, 29(2), 196–207.
+          <span class="why">→ 보안 문화 측정 도구. GV-H(경영진 참여·보안 문화), DE-H(신고 문화) 문항 설계 참고.</span></li>
+        <li>Gordon, L. A., &amp; Loeb, M. P. (2002). The economics of information security investment. <i>ACM Transactions on Information and System Security</i>, 5(4), 422–457.
+          <span class="why">→ 최적 보안 투자는 기대 손실의 1/e 이하. 개선 계획의 예산 산정 참고.</span></li>
+        <li>Parker, D. B. (1998). <i>Fighting Computer Crime: A New Framework for Protecting Information</i>. Wiley.
+          <span class="why">→ CIA에 소유·진정성·유용성을 더한 Parkerian Hexad. 보조 매트릭스 확장 시 참고.</span></li>
+      </ol>
+      <h3>표준·가이드</h3>
+      <ol class="ref" start="9">
+        <li>NIST (2024). <i>The NIST Cybersecurity Framework (CSF) 2.0</i>. NIST CSWP 29.
+          <span class="why">→ 행(6개 기능)과 카테고리 코드(GV.PO, PR.AA 등), Current/Target Profile 개념.</span></li>
+        <li>CMMI Product Team (2010). <i>CMMI for Development, Version 1.3</i> (CMU/SEI-2010-TR-033). Software Engineering Institute.
+          <span class="why">→ 단계적 성숙도 개념.</span></li>
+        <li>ISO/IEC 21827:2008. <i>Information technology — Security techniques — Systems Security Engineering — Capability Maturity Model (SSE-CMM)</i>.
+          <span class="why">→ 보안 공학 능력 수준 0~5 (미수행/비공식 수행/계획·추적/잘 정의됨/정량 통제/지속 개선).</span></li>
+        <li>ISO/IEC 27001:2022. <i>Information security, cybersecurity and privacy protection — Information security management systems — Requirements</i>.
+          <span class="why">→ 부속서 A 93개 통제(조직 37·인적 8·물리 14·기술 34) 매핑.</span></li>
+        <li>NIST SP 800-30 Rev.1 (2012). <i>Guide for Conducting Risk Assessments</i>.
+          <span class="why">→ 위험 = 발생 가능성 × 영향. 우선순위 가중치 개념.</span></li>
+        <li>NIST SP 800-55 Rev.1 (2008). <i>Performance Measurement Guide for Information Security</i>.
+          <span class="why">→ 보안 지표(KPI/KRI) 체계. 수준 4 판정 기준.</span></li>
+        <li>NIST SP 800-50 (2003). <i>Building an Information Technology Security Awareness and Training Program</i>.
+          <span class="why">→ 인식·교육·훈련 프로그램 구성.</span></li>
+        <li>NIST SP 800-61 Rev.3 (2025). <i>Incident Response Recommendations and Considerations for Cybersecurity Risk Management: A CSF 2.0 Community Profile</i>.
+          <span class="why">→ 대응(RS) 행 문항.</span></li>
+        <li>NIST SP 800-34 Rev.1 (2010). <i>Contingency Planning Guide for Federal Information Systems</i>.
+          <span class="why">→ 복구(RC) 행 문항, RTO/RPO.</span></li>
+        <li>과학기술정보통신부·개인정보보호위원회·KISA. <i>정보보호 및 개인정보보호 관리체계(ISMS-P) 인증기준</i> (관리체계 수립 및 운영 16 · 보호대책 요구사항 64 · 개인정보 처리 단계별 요구사항 22, 총 102개 항목).
+          <span class="why">→ 셀별 ISMS-P 항목 번호 매핑. CPPG 학습과 직접 연결.</span></li>
+      </ol>
+    </div>
+  </section>
+</div>
+
+<script>
+const LEVELS=[
+  {n:0,k:"미수행",en:"Not performed",d:"활동이 없거나 확인 가능한 증적이 없음.",e:"담당자 없음, 문서·로그 부재"},
+  {n:1,k:"비공식 수행",en:"Performed informally",d:"일부 담당자가 필요할 때 개인 역량으로 수행. 반복성·일관성 없음.",e:"구두 지시, 개인 PC의 엑셀, 사고 후 임시 조치"},
+  {n:2,k:"계획·추적",en:"Planned & tracked",d:"담당자와 절차가 문서화되고 계획에 따라 수행·기록됨. 단, 부서별 편차 존재.",e:"승인된 절차서, 수행 기록, 담당자 지정 공문"},
+  {n:3,k:"정의·표준화",en:"Well defined",d:"전사 표준 프로세스로 정의되어 모든 범위에 일관되게 적용. 정기 검토.",e:"전사 정책·지침, 정기 점검 보고서, 예외 관리 대장"},
+  {n:4,k:"정량 관리",en:"Quantitatively controlled",d:"성과 지표(KPI/KRI)로 측정·관리하고 목표 미달 시 조치.",e:"지표 대시보드, 경영진 보고, 추세 분석"},
+  {n:5,k:"지속 개선",en:"Continuously improving",d:"측정 결과와 사고 교훈을 반영해 프로세스를 지속 최적화·자동화.",e:"개선 이력, 자동화, 외부 벤치마킹·위협정보 반영"}
+];
+const ROWS=[
+  {id:"GV",k:"거버넌스",en:"Govern",w:1.0},
+  {id:"ID",k:"식별",en:"Identify",w:1.0},
+  {id:"PR",k:"보호",en:"Protect",w:1.2},
+  {id:"DE",k:"탐지",en:"Detect",w:1.2},
+  {id:"RS",k:"대응",en:"Respond",w:1.2},
+  {id:"RC",k:"복구",en:"Recover",w:1.0}
+];
+const COLS=[
+  {id:"T",k:"기술",en:"Technology"},
+  {id:"P",k:"정책·절차",en:"Policy & Practice"},
+  {id:"H",k:"인적·교육",en:"Education, Training & Awareness"}
+];
+const CELLS={
+ "GV-T":{t:"보안 지표·관리 도구",q:"보안 KPI/KRI가 시스템에서 자동 수집되어 경영진에게 정기 보고되는가?",ev:["보안 지표 대시보드","월/분기 경영진 보고서","GRC 도구 운영 현황"],map:["CSF GV.OV","ISO 5.35·5.36","ISMS-P 1.3.3, 1.4.2"]},
+ "GV-P":{t:"정책·책임 체계",q:"경영진이 승인한 정보보호·개인정보 정책과 CISO/CPO 등 책임·권한이 정의·공표되어 있는가?",ev:["승인된 정책서와 개정 이력","CISO·CPO 지정 문서","R&R 정의서","법적 요구사항 검토 기록"],map:["CSF GV.PO, GV.RR","ISO 5.1·5.2·5.31","ISMS-P 1.1.2, 1.1.3, 1.1.5, 1.4.1"]},
+ "GV-H":{t:"경영진 참여·보안 문화",q:"경영진이 보안 의사결정에 참여하고 예산·인력을 할당하며, 조직 내 보안 문화가 측정되는가?",ev:["정보보호위원회 회의록","예산·인력 계획","보안 문화 설문 결과"],map:["CSF GV.RR, GV.OC","ISO 5.4","ISMS-P 1.1.1, 1.1.6"]},
+ "ID-T":{t:"자산·취약점 자동 식별",q:"정보자산(HW/SW/데이터/클라우드) 목록이 자동으로 최신화되고 정기 취약점 진단이 수행되는가?",ev:["자산 관리 시스템(CMDB)","취약점 스캔 결과·조치 이력","개인정보 흐름도"],map:["CSF ID.AM, ID.RA","ISO 5.9·8.8","ISMS-P 1.2.1, 1.2.2, 2.11.2"]},
+ "ID-P":{t:"위험평가 절차",q:"정의된 방법론(위협·취약점·영향)으로 연 1회 이상 위험평가를 하고, 수용 가능 수준(DoA)과 보호대책을 결정하는가?",ev:["위험평가 방법론","위험평가 결과서","위험처리 계획·DoA 승인"],map:["CSF ID.RA, GV.RM","ISO 6.1.2(본문)·5.12","ISMS-P 1.2.3, 1.2.4"]},
+ "ID-H":{t:"자산 책임·공급망 인식",q:"자산별 책임자가 지정되어 위험을 인지하고, 외부자(수탁사·클라우드) 현황과 위험이 관리되는가?",ev:["자산별 책임자 목록","외부자·수탁사 현황표","공급망 위험평가"],map:["CSF GV.SC, ID.AM","ISO 5.9·5.19","ISMS-P 2.1.3, 2.3.1"]},
+ "PR-T":{t:"접근통제·암호화·패치",q:"MFA, 최소 권한, 중요정보 암호화(전송·저장), 보안 패치·악성코드 통제가 기술적으로 적용되는가?",ev:["MFA 적용 범위","특수권한 계정 목록","암호화 적용 현황","패치 적용률"],map:["CSF PR.AA, PR.DS, PR.PS","ISO 8.2·8.5·8.7·8.8·8.24","ISMS-P 2.5.3, 2.6.x, 2.7.1, 2.10.8, 2.10.9"]},
+ "PR-P":{t:"보호 운영 절차",q:"계정 발급·변경·회수, 접근권한 정기 검토, 변경관리, 외부자 계약 보안 절차가 운영되는가?",ev:["계정·권한 신청/승인 기록","권한 검토 결과","변경관리 대장","위탁 계약서 보안 조항"],map:["CSF PR.AA, PR.PS, GV.SC","ISO 5.15·5.18·5.20·8.32","ISMS-P 2.3.2, 2.5.1, 2.5.6, 2.9.1"]},
+ "PR-H":{t:"인식제고·교육훈련",q:"전 직원 대상 정기 교육, 직무별 심화 교육, 피싱 모의훈련, 보안 서약이 시행되고 효과가 측정되는가?",ev:["교육 계획·이수율","피싱 훈련 클릭률 추이","보안 서약서"],map:["CSF PR.AT","ISO 6.3·6.6","ISMS-P 2.2.3, 2.2.4"]},
+ "DE-T":{t:"로그·보안 모니터링",q:"주요 시스템·개인정보처리시스템의 로그와 접속기록이 중앙 수집(SIEM 등)·보관되고 실시간 모니터링되는가?",ev:["로그 수집 대상 목록","접속기록 보관 기간","SIEM 경보 현황"],map:["CSF DE.CM","ISO 8.15·8.16·8.17","ISMS-P 2.9.4, 2.9.6, 2.11.3"]},
+ "DE-P":{t:"이상징후 분석 절차",q:"탐지 규칙·임계치·위협정보 활용 기준이 정의되고, 접속기록 점검과 경보 분석이 정기 수행되는가?",ev:["탐지 룰셋·임계치 정의","접속기록 점검 결과","위협 인텔리전스 수신·반영 기록"],map:["CSF DE.AE","ISO 5.7·5.25","ISMS-P 2.9.5, 2.11.3"]},
+ "DE-H":{t:"보안사건 신고 문화",q:"직원이 의심 사건을 쉽게 신고할 수 있는 채널이 있고, 신고가 실제로 이루어지며 피드백되는가?",ev:["신고 채널·절차","신고 건수 추이","신고자 피드백 기록"],map:["CSF DE.AE, RS.CO","ISO 6.8","ISMS-P 2.11.1"]},
+ "RS-T":{t:"사고 대응 기술 역량",q:"침해 시스템 격리, 증거 수집(포렌식), 대응 자동화(SOAR 등) 수단이 준비되어 있는가?",ev:["격리·차단 수단","포렌식 도구·절차","대응 플레이북 자동화"],map:["CSF RS.AN, RS.MI","ISO 5.26·5.28","ISMS-P 2.11.5"]},
+ "RS-P":{t:"사고 대응 계획·신고",q:"사고 등급·보고 체계, 개인정보 유출 시 통지·신고(인지 후 72시간 이내) 절차가 문서화되어 있는가?",ev:["사고 대응 계획서","비상연락망","유출 통지·신고 절차와 서식"],map:["CSF RS.MA, RS.CO","ISO 5.24·5.26","ISMS-P 2.11.1, 2.11.5, 3.5.x"]},
+ "RS-H":{t:"대응 훈련",q:"사고 대응 모의훈련(도상·실전)을 정기 실시하고 결과를 대응체계 개선에 반영하는가?",ev:["훈련 계획·시나리오","훈련 결과 보고서","개선 조치 이력"],map:["CSF RS.MA, ID.IM","ISO 5.24·5.27","ISMS-P 2.11.4"]},
+ "RC-T":{t:"백업·이중화",q:"RTO/RPO에 맞춘 백업(오프라인·소산 포함)과 이중화가 구현되고 복구 테스트로 검증되는가?",ev:["백업 정책·대상","복구 테스트 결과","이중화 구성도"],map:["CSF RC.RP, PR.DS","ISO 8.13·8.14","ISMS-P 2.9.3, 2.12.1"]},
+ "RC-P":{t:"업무연속성·재해복구 계획",q:"BCP/DRP가 수립되어 핵심 업무별 복구 우선순위·절차가 정의되고 정기 검토되는가?",ev:["BIA(업무영향분석)","BCP/DRP 문서","재해복구 시험 결과"],map:["CSF RC.RP","ISO 5.29·5.30","ISMS-P 2.12.1, 2.12.2"]},
+ "RC-H":{t:"복구 소통·교훈 학습",q:"복구 중 대내외(정보주체·당국·언론) 소통 역할이 정해져 있고, 사후 교훈이 교육·절차에 반영되는가?",ev:["커뮤니케이션 계획","사후 검토(Lessons Learned) 보고서","재발 방지 교육"],map:["CSF RC.CO, ID.IM","ISO 5.27","ISMS-P 2.11.4, 2.12.2"]}
+};
+const CUBE_R=[{id:"C",k:"기밀성",en:"Confidentiality"},{id:"I",k:"무결성",en:"Integrity"},{id:"A",k:"가용성",en:"Availability"}];
+const CUBE_C=[{id:"tr",k:"전송",en:"Transmission"},{id:"st",k:"저장",en:"Storage"},{id:"pr",k:"처리",en:"Processing"}];
+const CUBE_EX={
+ "C-tr":"TLS 1.2+, VPN, 이메일 암호화","C-st":"DB·파일 암호화, 키 관리, 매체 통제","C-pr":"접근권한 최소화, 화면 마스킹, 출력 통제",
+ "I-tr":"전자서명·MAC, 무결성 검증","I-st":"해시 검증, 변경 탐지(FIM), 백업 무결성","I-pr":"입력값 검증, 직무 분리, 변경관리",
+ "A-tr":"회선 이중화, DDoS 대응","A-st":"백업·소산, 스토리지 이중화","A-pr":"성능·장애관리, 클러스터링, DR"
+};
+
+const STORE="secmatrix.v1";
+let S={meta:{org:"",date:"",assessor:"",target:3},scores:{},cube:{},weights:{}};
+function load(){try{const r=localStorage.getItem(STORE);if(r){const o=JSON.parse(r);S=Object.assign(S,o);}}catch(e){}}
+function save(){try{localStorage.setItem(STORE,JSON.stringify(S));}catch(e){}}
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const lv=v=>v==null||v==="na"?null:Number(v);
+function color(v){if(v==null)return["var(--card)","var(--text)"];const i=Math.max(0,Math.min(5,Math.round(v)));return[`var(--l${i})`,`var(--l${i}t)`];}
+function mean(a){const x=a.filter(v=>v!=null);return x.length?x.reduce((s,v)=>s+v,0)/x.length:null;}
+const fmt=v=>v==null?"–":v.toFixed(1);
+const W=r=>S.weights[r]!=null?Number(S.weights[r]):ROWS.find(x=>x.id===r).w;
+
+function renderLegend(){$("#legend").innerHTML=LEVELS.map(l=>`<span style="background:var(--l${l.n});color:var(--l${l.n}t)">${l.n} ${l.k}</span>`).join("");}
+
+function segHTML(key,cur,group){
+  return `<div class="seg" data-key="${key}" data-g="${group}">`+
+    [0,1,2,3,4,5].map(n=>`<button class="${cur===n?"on":""}" data-v="${n}" title="${LEVELS[n].k}">${n}</button>`).join("")+
+    `<button class="na ${cur==="na"?"on":""}" data-v="na">N/A</button></div>`;
+}
+
+function renderMatrix(){
+  let h=`<div class="mh corner"></div>`+COLS.map(c=>`<div class="mh">${c.k}<small>${c.en}</small></div>`).join("")+`<div class="mh avgh">평균</div>`;
+  ROWS.forEach(r=>{
+    h+=`<div class="rh"><b>${r.id} · ${r.k}</b><span class="sub">${r.en}</span></div>`;
+    COLS.forEach(c=>{
+      const key=`${r.id}-${c.id}`,d=CELLS[key],cur=S.scores[key]??null;
+      const [bg,fg]=color(lv(cur));
+      h+=`<div class="cell" id="c-${key}" style="background:${bg};color:${fg}">
+        <div class="id">${key} <span class="mob-label">· ${c.k}</span></div>
+        <div class="t">${esc(d.t)}</div>
+        <div class="q">${esc(d.q)}</div>
+        <details><summary>증적 예시 · 매핑</summary><ul>${d.ev.map(e=>`<li>${esc(e)}</li>`).join("")}</ul>
+          <div class="chips" style="margin-top:6px">${d.map.map(m=>`<span class="chip">${esc(m)}</span>`).join("")}</div></details>
+        ${segHTML(key,cur,"s")}
+      </div>`;
+    });
+    const a=mean(COLS.map(c=>lv(S.scores[`${r.id}-${c.id}`])));const [bg,fg]=color(a);
+    h+=`<div class="avg" id="a-${r.id}" style="background:${bg};color:${fg}"><span class="mob-label">${r.k} 평균&nbsp;</span>${fmt(a)}</div>`;
+  });
+  $("#matrix").innerHTML=h;
+}
+
+function renderCube(){
+  let h=`<div class="mh corner"></div>`+CUBE_C.map(c=>`<div class="mh">${c.k}<small>${c.en}</small></div>`).join("");
+  CUBE_R.forEach(r=>{
+    h+=`<div class="rh"><b>${r.k}</b><span class="sub">${r.en}</span></div>`;
+    CUBE_C.forEach(c=>{
+      const key=`${r.id}-${c.id}`,cur=S.cube[key]??null;const [bg,fg]=color(lv(cur));
+      h+=`<div class="cell" id="k-${key}" style="background:${bg};color:${fg}">
+        <div class="id">${r.k} × ${c.k}</div>
+        <div class="q">통제 예: ${esc(CUBE_EX[key])}</div>
+        ${segHTML(key,cur,"c")}
+      </div>`;
+    });
+  });
+  $("#cube").innerHTML=h;
+}
+
+function onSeg(e){
+  const b=e.target.closest(".seg button");if(!b)return;
+  const seg=b.parentElement,key=seg.dataset.key,g=seg.dataset.g;
+  const v=b.dataset.v==="na"?"na":Number(b.dataset.v);
+  const bag=g==="s"?S.scores:S.cube;
+  if(bag[key]===v)delete bag[key];else bag[key]=v;
+  save();
+  if(g==="s")renderMatrix();else renderCube();
+  renderResults();
+}
+
+function renderResults(){
+  const T=Number(S.meta.target)||3;
+  const all=Object.keys(CELLS).map(k=>lv(S.scores[k]));
+  const done=Object.keys(CELLS).filter(k=>S.scores[k]!=null).length;
+  const overall=mean(all);
+  const rowAvg=ROWS.map(r=>mean(COLS.map(c=>lv(S.scores[`${r.id}-${c.id}`]))));
+  const colAvg=COLS.map(c=>mean(ROWS.map(r=>lv(S.scores[`${r.id}-${c.id}`]))));
+  const meetN=all.filter(v=>v!=null&&v>=T).length,ratedN=all.filter(v=>v!=null).length;
+  const lvName=overall==null?"–":LEVELS[Math.floor(overall+1e-9)].k;
+  $("#resMeta").textContent=[S.meta.org,S.meta.date,S.meta.assessor].filter(Boolean).join(" · ");
+  $("#kpis").innerHTML=[
+    [fmt(overall),"종합 성숙도 (0~5)"],
+    [lvName,"종합 수준 단계"],
+    [`${done}/18`,"진단 완료 셀"],
+    [ratedN?Math.round(meetN/ratedN*100)+"%":"–",`목표(${T}) 충족률`],
+    [overall==null?"–":Math.round(overall/5*100)+"점","100점 환산"]
+  ].map(([v,l])=>`<div class="kpi"><div class="v">${esc(v)}</div><div class="l">${l}</div></div>`).join("");
+
+  // radar
+  const R=110,cx=160,cy=150,n=6;
+  const pt=(i,v)=>{const a=-Math.PI/2+i*2*Math.PI/n;return[cx+Math.cos(a)*R*v/5,cy+Math.sin(a)*R*v/5];};
+  let s=`<svg viewBox="0 0 320 300" width="100%" style="max-width:420px;display:block;margin:auto" role="img" aria-label="CSF 기능별 성숙도 레이더 차트">`;
+  for(let k=1;k<=5;k++){s+=`<polygon points="${ROWS.map((_,i)=>pt(i,k).join(",")).join(" ")}" fill="none" stroke="var(--line)"/>`;}
+  ROWS.forEach((r,i)=>{const [x,y]=pt(i,5);s+=`<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="var(--line)"/>`;
+    const [lx,ly]=pt(i,6.1);s+=`<text x="${lx}" y="${ly}" font-size="11" text-anchor="middle" dominant-baseline="middle">${r.k} ${fmt(rowAvg[i])}</text>`;});
+  s+=`<polygon points="${ROWS.map((_,i)=>pt(i,T).join(",")).join(" ")}" fill="none" stroke="var(--bad)" stroke-dasharray="4 3" stroke-width="1.5"/>`;
+  s+=`<polygon points="${ROWS.map((_,i)=>pt(i,rowAvg[i]??0).join(",")).join(" ")}" fill="var(--primary)" fill-opacity=".3" stroke="var(--primary)" stroke-width="2"/>`;
+  ROWS.forEach((_,i)=>{const [x,y]=pt(i,rowAvg[i]??0);s+=`<circle cx="${x}" cy="${y}" r="3" fill="var(--primary)"/>`;});
+  s+=`</svg>`;$("#radar").innerHTML=s;
+
+  // dim bars
+  $("#dimBars").innerHTML=COLS.map((c,i)=>`<div class="bar"><span>${c.k}</span><div class="track"><div class="fill" style="width:${(colAvg[i]??0)/5*100}%"></div><div class="tgt" style="left:${T/5*100}%"></div></div><b>${fmt(colAvg[i])}</b></div>`).join("");
+  const valid=colAvg.filter(v=>v!=null);
+  if(valid.length===3){
+    const mx=Math.max(...colAvg),mn=Math.min(...colAvg),lo=COLS[colAvg.indexOf(mn)].k,hi=COLS[colAvg.indexOf(mx)].k;
+    $("#balanceNote").innerHTML=mx-mn>=1?`⚠️ <b>${hi}</b>(${fmt(mx)}) 대비 <b>${lo}</b>(${fmt(mn)}) 차원이 1단계 이상 낮습니다. 특정 차원에 편중된 보안은 McCumber 모형과 사회·조직적 관점 연구(Dhillon &amp; Backhouse, 2001)가 경고하는 전형적 취약 구조입니다.`:`✅ 세 보호대책 차원의 균형이 양호합니다 (최대 편차 ${fmt(mx-mn)}).`;
+  }else $("#balanceNote").textContent="";
+
+  // heat
+  let hm=`<div class="h"></div>`+COLS.map(c=>`<div class="h">${c.k}</div>`).join("");
+  ROWS.forEach(r=>{hm+=`<div class="h">${r.k}</div>`+COLS.map(c=>{const v=lv(S.scores[`${r.id}-${c.id}`]);const [bg,fg]=color(v);return `<div style="background:${v==null?"var(--l0)":bg};color:${fg}">${v==null?"–":v}</div>`;}).join("");});
+  $("#heat").innerHTML=hm;
+  let hm2=`<div class="h"></div>`+CUBE_C.map(c=>`<div class="h">${c.k}</div>`).join("");
+  CUBE_R.forEach(r=>{hm2+=`<div class="h">${r.k}</div>`+CUBE_C.map(c=>{const v=lv(S.cube[`${r.id}-${c.id}`]);const [bg,fg]=color(v);return `<div style="background:${v==null?"var(--l0)":bg};color:${fg}">${v==null?"–":v}</div>`;}).join("");});
+  $("#heat2").innerHTML=hm2;
+
+  // gap table
+  const gaps=Object.keys(CELLS).map(k=>{const v=lv(S.scores[k]);if(v==null)return null;const r=k.split("-")[0];const g=Math.max(0,T-v);return{k,v,g,p:g*W(r),r};}).filter(x=>x&&x.g>0).sort((a,b)=>b.p-a.p||a.v-b.v);
+  const next=v=>LEVELS[Math.min(5,v+1)];
+  $("#gapTable").innerHTML=gaps.length?`<tr><th>#</th><th>셀</th><th>항목</th><th>현재→목표</th><th>점수</th><th>다음 단계 달성 요건</th><th>매핑</th></tr>`+
+    gaps.map((x,i)=>{const d=CELLS[x.k];const nl=next(x.v);return `<tr><td>${i+1}</td><td><b>${x.k}</b></td><td>${esc(d.t)}</td><td>${x.v} → ${T}</td><td>${x.p.toFixed(1)}</td><td><b>Lv${nl.n} ${nl.k}</b>: ${esc(nl.d)}<br><span class="sub">증적: ${esc(d.ev.join(", "))}</span></td><td class="sub">${esc(d.map.join(" / "))}</td></tr>`;}).join("")
+    :`<tr><td class="sub">${done?"모든 진단 셀이 목표 수준을 충족합니다. 🎉":"① 진단 매트릭스에서 셀을 평가하면 우선순위가 표시됩니다."}</td></tr>`;
+}
+
+function renderWeights(){
+  $("#weights").innerHTML=ROWS.map(r=>`<label class="f">${r.k} 가중치<select data-w="${r.id}">${[0.5,0.8,1.0,1.2,1.5,2.0].map(v=>`<option ${Math.abs(W(r.id)-v)<1e-9?"selected":""}>${v.toFixed(1)}</option>`).join("")}</select></label>`).join("");
+}
+
+function renderLevels(){
+  $("#levelTable").innerHTML=`<tr><th>수준</th><th>명칭</th><th>판정 기준</th><th>대표 증적</th></tr>`+LEVELS.map(l=>`<tr><td><span style="background:var(--l${l.n});color:var(--l${l.n}t);padding:2px 8px;border-radius:6px;font-weight:700">${l.n}</span></td><td><b>${l.k}</b><br><span class="sub">${l.en}</span></td><td>${l.d}</td><td class="sub">${l.e}</td></tr>`).join("");
+}
+
+function syncMeta(){["org","date","assessor","target"].forEach(id=>{$("#"+id).value=S.meta[id]??"";});}
+function download(name,text,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
+
+function toCSV(){
+  const rows=[["구분","셀","기능","차원","항목","수준","수준명","목표","갭","매핑"]];
+  const T=Number(S.meta.target)||3;
+  ROWS.forEach(r=>COLS.forEach(c=>{const k=`${r.id}-${c.id}`,v=S.scores[k];const n=lv(v);
+    rows.push(["진단",k,r.k,c.k,CELLS[k].t,v==null?"":v==="na"?"N/A":v,n==null?"":LEVELS[n].k,T,n==null?"":Math.max(0,T-n),CELLS[k].map.join(" / ")]);}));
+  CUBE_R.forEach(r=>CUBE_C.forEach(c=>{const k=`${r.id}-${c.id}`,v=S.cube[k];const n=lv(v);
+    rows.push(["McCumber",k,r.k,c.k,CUBE_EX[k],v==null?"":v==="na"?"N/A":v,n==null?"":LEVELS[n].k,T,n==null?"":Math.max(0,T-n),""]);}));
+  return "﻿"+rows.map(r=>r.map(x=>`"${String(x).replace(/"/g,'""')}"`).join(",")).join("\r\n");
+}
+
+function sample(){
+  S.meta={org:"예시 기관",date:new Date().toISOString().slice(0,10),assessor:"홍길동",target:3};
+  S.scores={"GV-T":1,"GV-P":3,"GV-H":2,"ID-T":2,"ID-P":3,"ID-H":1,"PR-T":4,"PR-P":3,"PR-H":2,"DE-T":3,"DE-P":2,"DE-H":1,"RS-T":2,"RS-P":3,"RS-H":1,"RC-T":3,"RC-P":2,"RC-H":1};
+  S.cube={"C-tr":4,"C-st":3,"C-pr":2,"I-tr":3,"I-st":2,"I-pr":2,"A-tr":3,"A-st":3,"A-pr":2};
+}
+
+function all(){syncMeta();renderMatrix();renderCube();renderWeights();renderResults();}
+
+document.addEventListener("DOMContentLoaded",()=>{
+  load();
+  if(!S.meta.date)S.meta.date=new Date().toISOString().slice(0,10);
+  renderLegend();renderLevels();all();
+  try{const t=localStorage.getItem(STORE+".tab");if(t)showTab(t);}catch(e){}
+  document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
+  $("#matrix").addEventListener("click",onSeg);$("#cube").addEventListener("click",onSeg);
+  ["org","date","assessor","target"].forEach(id=>$("#"+id).addEventListener("input",e=>{S.meta[id]=id==="target"?Number(e.target.value):e.target.value;save();renderResults();}));
+  $("#weights").addEventListener("change",e=>{const w=e.target.dataset.w;if(w){S.weights[w]=Number(e.target.value);save();renderResults();}});
+  $("#btnCsv").onclick=()=>download(`보안진단_${S.meta.org||"조직"}_${S.meta.date||""}.csv`,toCSV(),"text/csv;charset=utf-8");
+  $("#btnJson").onclick=()=>download(`보안진단_${S.meta.org||"조직"}_${S.meta.date||""}.json`,JSON.stringify(S,null,2),"application/json");
+  $("#btnLoad").onclick=()=>$("#file").click();
+  $("#file").onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const o=JSON.parse(t);S={meta:Object.assign({target:3},o.meta||{}),scores:o.scores||{},cube:o.cube||{},weights:o.weights||{}};save();all();}catch(err){alert("JSON 파일을 읽을 수 없습니다.");}});e.target.value="";};
+  $("#btnSample").onclick=()=>{if(Object.keys(S.scores).length&&!confirm("현재 입력을 예시 데이터로 덮어쓸까요?"))return;sample();save();all();};
+  $("#btnReset").onclick=()=>{if(!confirm("모든 진단 결과를 지울까요?"))return;S={meta:{org:"",date:new Date().toISOString().slice(0,10),assessor:"",target:3},scores:{},cube:{},weights:{}};save();all();};
+  $("#btnPrint").onclick=()=>window.print();
+});
+function showTab(t){
+  document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("on",b.dataset.tab===t));
+  document.querySelectorAll(".panel").forEach(p=>p.classList.toggle("on",p.id==="p-"+t));
+  try{localStorage.setItem(STORE+".tab",t);}catch(e){}
+}
+</script>
+</body>
+</html>
