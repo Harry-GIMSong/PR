@@ -1268,6 +1268,8 @@ function log_(who, action, detail) {
 
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('🔐 주문관리')
+    .addItem('📋 주문 시트 양식 만들기', 'menuSetupTemplate')
+    .addSeparator()
     .addItem('사용자 추가 / PIN 바꾸기', 'menuAddUser')
     .addItem('사용자 목록 · 삭제', 'menuUsers')
     .addItem('모든 기기 로그아웃', 'menuRevokeAll')
@@ -1290,6 +1292,80 @@ function onOpen() {
     .addItem('비식별 자동 처리 켜기 (매일 새벽)', 'menuAutoOn')
     .addItem('비식별 자동 처리 끄기', 'menuAutoOff')
     .addToUi();
+}
+
+/* ------------------------------------------------------------------ */
+/* 주문 시트 양식 만들기                                                */
+/* ------------------------------------------------------------------ */
+
+const TEMPLATE = {
+  headers: ['순번', '주문번호', '구분', '용량', '비고', '구매자명', '수취인명', '주문일', '택배사', '송장번호', '발송일',
+    '수취인연락처1', '통합배송지', '배송메모', '우편번호', '수익금(-수수료)', '인삼대금', '순수익', '정산여부'],
+  text: ['주문번호', '송장번호', '수취인연락처1', '우편번호', '구매자명', '수취인명', '통합배송지', '배송메모'], // 글자 그대로 (0 빠짐·지수표기 방지)
+  date: ['주문일', '발송일'],
+  money: ['수익금(-수수료)', '인삼대금', '순수익'],
+  widths: { '순번': 50, '주문번호': 150, '구분': 100, '용량': 70, '비고': 120, '구매자명': 80, '수취인명': 80, '주문일': 95,
+    '택배사': 95, '송장번호': 120, '발송일': 95, '수취인연락처1': 120, '통합배송지': 260, '배송메모': 160, '우편번호': 70,
+    '수익금(-수수료)': 105, '인삼대금': 90, '순수익': 90, '정산여부': 70 },
+  couriers: ['CJ대한통운', '우체국택배', '한진택배', '롯데택배', '로젠택배', '경동택배', '직접전달'],
+};
+
+function menuSetupTemplate() {
+  const ui = SpreadsheetApp.getUi();
+  let sh = ss_().getActiveSheet();
+  const hasData = sh.getLastRow() > 0 || sh.getLastColumn() > 0;
+  if (hasData) {
+    const r = ui.alert('주문 시트 양식 만들기', '지금 시트("' + sh.getName() + '")에 이미 내용이 있어요.\n새 시트 "주문" 을 만들어서 양식을 넣을까요?', ui.ButtonSet.YES_NO);
+    if (r !== ui.Button.YES) return;
+    let name = '주문', k = 2;
+    while (ss_().getSheetByName(name)) name = '주문' + (k++);
+    sh = ss_().insertSheet(name);
+  }
+  const sample = ui.alert('예시 주문', '어떻게 쓰는지 볼 수 있게 예시 주문 3건(가짜 정보)을 넣을까요?\n(확인한 뒤 지우면 됩니다)', ui.ButtonSet.YES_NO) === ui.Button.YES;
+  buildTemplate_(sh, sample);
+  ss_().setActiveSheet(sh);
+  log_('시트 주인', '주문 시트 양식 만들기', sh.getName() + (sample ? ' (예시 포함)' : ''));
+  ui.alert('양식을 만들었어요 ✅',
+    '· 1행 머리글 고정, 칸 형식(글자/날짜/금액), 택배사·정산여부 고르기 목록을 넣었어요.\n' +
+    '· 예전 주문을 옮길 때는 원래 시트에서 2행부터 복사 → 이 시트 A2 칸을 누르고 Ctrl+Shift+V (값만 붙여넣기) 하세요.\n' +
+    '  그래야 칸 형식이 유지돼요.\n' +
+    '· 다음: 🔐 주문관리 → 사용자 추가 / PIN 바꾸기', ui.ButtonSet.OK);
+}
+
+function buildTemplate_(sh, sample) {
+  const H = TEMPLATE.headers, n = H.length, rows = 1000;
+  if (sh.getMaxColumns() < n) sh.insertColumnsAfter(sh.getMaxColumns(), n - sh.getMaxColumns());
+  if (sh.getMaxRows() < rows) sh.insertRowsAfter(sh.getMaxRows(), rows - sh.getMaxRows());
+  const head = sh.getRange(CONFIG.HEADER_ROW, 1, 1, n);
+  head.setValues([H]).setFontWeight('bold').setBackground('#e8f3e8').setHorizontalAlignment('center').setWrap(true);
+  sh.setFrozenRows(CONFIG.HEADER_ROW);
+  const col = name => H.indexOf(name) + 1;
+  const body = name => sh.getRange(CONFIG.HEADER_ROW + 1, col(name), rows - CONFIG.HEADER_ROW, 1);
+  TEMPLATE.text.forEach(h => body(h).setNumberFormat('@'));
+  TEMPLATE.date.forEach(h => body(h).setNumberFormat(CONFIG.DATE_FORMAT || CONFIG.DATE_FALLBACK_FORMAT));
+  TEMPLATE.money.forEach(h => body(h).setNumberFormat('#,##0'));
+  body('순번').setNumberFormat('0');
+  body('택배사').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(TEMPLATE.couriers, true).setAllowInvalid(true).build());
+  body('정산여부').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['O'], true).setAllowInvalid(true)
+    .setHelpText('정산이 끝나면 O').build());
+  body('정산여부').setHorizontalAlignment('center');
+  Object.keys(TEMPLATE.widths).forEach(h => sh.setColumnWidth(col(h), TEMPLATE.widths[h]));
+
+  if (sample) {
+    const today = new Date();
+    const day = d => new Date(today.getFullYear(), today.getMonth(), today.getDate() - d);
+    const data = [
+      [1, '2026000000000001', '6년근 수삼', '750g', '예시 - 지워도 됨', '홍길동', '홍길동', day(120), 'CJ대한통운', '600000000001', day(119),
+        '010-0000-0001', '경기도 이천시 부발읍 예시로 1', '부재시 문앞', '17322', 52000, 40000, 12000, 'O'],
+      [2, '2026000000000002', '홍삼정', '240g', '예시 - 지워도 됨', '김예시', '이예시', day(10), 'CJ대한통운', '600000000002', day(9),
+        '010-0000-0002', '서울특별시 강남구 예시로 2', '', '06236', 35000, 28000, 7000, ''],
+      [3, '2026000000000003', '6년근 수삼', '1.5kg', '예시 - 지워도 됨 (선물포장)', '박예시', '박예시', day(0), '', '', '',
+        '010-0000-0003', '부산광역시 해운대구 예시로 3', '경비실에 맡겨 주세요', '48094', 98000, 80000, 18000, ''],
+    ];
+    const target = sh.getRange(CONFIG.HEADER_ROW + 1, 1, data.length, n);
+    target.setValues(data);
+    if (encOn_()) encryptPending();
+  }
 }
 
 function menuAddUser() {
