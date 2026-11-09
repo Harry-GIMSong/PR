@@ -24,13 +24,37 @@ const CONFIG = {
     phone:   ['전화', '연락처', '휴대폰', '핸드폰', '폰번호', 'phone', 'tel', 'mobile'],
     address: ['주소', '배송지', 'address'],
     name:    ['수취인', '받는', '주문자', '구매자', '고객', '성함', '이름', '성명', 'name'],
-    other:   ['개인통관', '통관부호', '주민', '계좌', '이메일', 'email', '메일'],
+    other:   ['우편번호', '개인통관', '통관부호', '주민', '계좌', '이메일', 'email', '메일'],
   },
   // 이름 열로 잘못 인식되지 않게 할 단어 (예: "상품이름")
   NAME_EXCLUDE: ['상품', '품목', '제품', '옵션', '택배', '택배사'],
 
-  // 이 단어가 머리글에 있으면 웹앱에서 고치지 못하게 함 (예: ['주문번호'])
-  READONLY_KEYWORDS: [],
+  // 이 단어가 머리글에 있으면 웹앱에서 고치지 못하게 함
+  READONLY_KEYWORDS: ['순번', '주문번호'],
+
+  // 관리자(나)에게만 보이는 열. 부모님 화면에서는 아예 안 보이고 서버에서도 안 보냄.
+  // 예: 수익·수수료를 부모님께 안 보이게 하려면 ['수익금', '순수익']
+  ADMIN_ONLY_KEYWORDS: [],
+
+  // 주문 카드 맨 위 제목으로 쓸 열
+  TITLE_KEYWORDS: ['주문일', '구분', '용량'],
+  // 카드에서 "자세히 ▾" 안에 접어 둘 열 (자주 안 보는 것)
+  DETAIL_KEYWORDS: ['순번', '주문번호', '구매자명', '우편번호', '수익금', '인삼대금', '순수익'],
+
+  // 발송 처리 버튼이 채울 열. 송장번호나 발송일이 들어 있으면 "발송 완료" 로 봄
+  SHIP: { courier: ['택배사'], invoice: ['송장번호'], date: ['발송일'] },
+  // 정산 열과, 정산이 끝났다고 볼 값 (체크박스 열이면 체크 = 완료)
+  SETTLE_KEYWORDS: ['정산'],
+  SETTLED_VALUES: ['완료', '정산완료', '정산', 'o', 'y', 'v', '✔', '✓', 'true', '예', 'ㅇ', '입금완료'],
+  SETTLE_MARK: 'O',        // "정산 완료" 버튼을 누르면 넣을 글자 (체크박스 열이 아닐 때)
+  // 월별 합계를 낼 금액 열
+  SUM_KEYWORDS: ['수익금', '인삼대금', '순수익', '금액', '대금', '매출'],
+  // 월별 합계를 묶을 날짜 열 (첫 번째로 찾은 열)
+  MONTH_KEYWORDS: ['주문일'],
+  // 월별 합계에서 건수를 나눠 볼 열 (예: 구분별 몇 건)
+  GROUP_KEYWORDS: ['구분'],
+  // 새 주문을 넣을 때 자동으로 다음 번호를 매길 열
+  SERIAL_KEYWORDS: ['순번'],
 
   DATE_KEYWORDS: ['주문일', '결제일', '날짜', '일자', '발송일', '주문 날짜', 'date'],
 
@@ -42,9 +66,15 @@ const CONFIG = {
   LOG_SHEET: '_접속기록',
   LOG_KEEP_ROWS: 5000,
 
-  // 주문일로부터 이 일수가 지난 행의 개인정보를 시트에서 영구히 가립니다(파기). 0 이면 끔.
-  // 메뉴에서 "자동 파기 켜기" 를 해야 매일 새벽에 실행됩니다.
-  ANONYMIZE_AFTER_DAYS: 180,
+  // ── 개인정보 비식별 처리 ──
+  // 정산여부가 O(정산 완료)이고, 발송일(없으면 주문일)로부터 이 일수가 지난 주문의
+  // 성명·휴대폰·주소·우편번호를 시트에서 비식별 처리합니다. 0 이면 끔.
+  // 메뉴 "🔐 주문관리 → 비식별 자동 처리 켜기" 를 해야 매일 새벽에 실행됩니다.
+  ANON_AFTER_DAYS: 90,
+  ANON_REQUIRE_SETTLED: true,          // true = 정산 완료된 주문만
+  ANON_BASE_KEYWORDS: ['발송일', '주문일'], // 기간을 셀 날짜 열 (앞의 것이 비어 있으면 다음 것)
+  ANON_CLEAR_KEYWORDS: ['배송메모'],   // 내용을 통째로 지울 열 (위치·연락처가 섞여 있을 수 있어서)
+  ANON_SHEET: '_비식별기록',            // 처리 기록 + 일방향 암호화한 고객키 (숨김 시트)
 };
 
 const ROLES = { admin: '관리자', editor: '편집', viewer: '보기만' };
@@ -199,7 +229,7 @@ function ss_() { return SpreadsheetApp.getActiveSpreadsheet(); }
 
 function allowedSheets_() {
   return ss_().getSheets()
-    .filter(s => s.getName() !== CONFIG.LOG_SHEET && !s.isSheetHidden())
+    .filter(s => s.getName() !== CONFIG.LOG_SHEET && s.getName() !== CONFIG.ANON_SHEET && !s.isSheetHidden())
     .filter(s => !CONFIG.SHEETS.length || CONFIG.SHEETS.indexOf(s.getName()) >= 0)
     .map(s => s.getName());
 }
@@ -248,6 +278,12 @@ function columns_(sh) {
       check: check,
       date: date || has_(h, CONFIG.DATE_KEYWORDS),
       readonly: CONFIG.READONLY_KEYWORDS.length > 0 && has_(h, CONFIG.READONLY_KEYWORDS),
+      adminOnly: CONFIG.ADMIN_ONLY_KEYWORDS.length > 0 && has_(h, CONFIG.ADMIN_ONLY_KEYWORDS),
+      title: has_(h, CONFIG.TITLE_KEYWORDS),
+      detail: has_(h, CONFIG.DETAIL_KEYWORDS),
+      ship: has_(h, CONFIG.SHIP.invoice) ? 'invoice' : has_(h, CONFIG.SHIP.courier) ? 'courier' : has_(h, CONFIG.SHIP.date) ? 'date' : '',
+      settle: has_(h, CONFIG.SETTLE_KEYWORDS),
+      serial: has_(h, CONFIG.SERIAL_KEYWORDS),
     };
   });
 }
@@ -285,6 +321,7 @@ function getData(token, sheetName) {
   const name = names.indexOf(sheetName) >= 0 ? sheetName : names[0];
   const sh = ss_().getSheetByName(name);
   const cols = columns_(sh);
+  const hide = cols.map(c => c.adminOnly && user.role !== 'admin');
   const lastRow = sh.getLastRow();
   const first = CONFIG.HEADER_ROW + 1;
   let rows = [];
@@ -298,6 +335,7 @@ function getData(token, sheetName) {
       const v = [], m = [];
       for (let c = 0; c < cols.length; c++) {
         const col = cols[c];
+        if (hide[c]) { v.push(''); continue; }
         if (col.check) { v.push(raw[r][c] === true); continue; }
         const d = disp[r][c];
         const masked = CONFIG.MASK_PII ? mask_(d, col.pii) : d;
@@ -312,8 +350,11 @@ function getData(token, sheetName) {
     user: { name: user.name, role: user.role, roleName: ROLES[user.role] },
     sheets: names,
     sheet: name,
-    cols: cols,
+    cols: cols.filter((c, i) => !hide[i]),
     rows: rows,
+    couriers: recentValues_(cols, rows, 'courier'),
+    settleMark: CONFIG.SETTLE_MARK,
+    settledValues: CONFIG.SETTLED_VALUES,
     truncated: lastRow - CONFIG.HEADER_ROW > CONFIG.MAX_ROWS,
     at: Date.now(),
   };
@@ -326,6 +367,7 @@ function reveal(token, sheetName, row, colIdx) {
   row = Number(row); colIdx = Number(colIdx);
   if (!(row > CONFIG.HEADER_ROW && row <= sh.getLastRow()) || !(colIdx >= 0 && colIdx < sh.getLastColumn())) throw new Error('잘못된 위치예요.');
   const header = sh.getRange(CONFIG.HEADER_ROW, colIdx + 1).getDisplayValue();
+  if (user.role !== 'admin' && CONFIG.ADMIN_ONLY_KEYWORDS.length && has_(header, CONFIG.ADMIN_ONLY_KEYWORDS)) throw new Error('볼 수 없는 칸이에요.');
   const value = sh.getRange(row, colIdx + 1).getDisplayValue();
   log_(user.name, '개인정보 보기', sheetName + ' ' + row + '행 [' + header + ']');
   return value;
@@ -356,6 +398,7 @@ function updateCell(token, sheetName, row, colIdx, oldValue, newValue) {
     const col = cols[colIdx];
     if (!col || !(row > CONFIG.HEADER_ROW && row <= sh.getLastRow())) throw new Error('잘못된 위치예요.');
     if (col.readonly) throw new Error('이 칸은 웹앱에서 고칠 수 없어요.');
+    if (col.adminOnly && user.role !== 'admin') throw new Error('고칠 수 없는 칸이에요.');
     const cell = sh.getRange(row, colIdx + 1);
     if (cell.getFormula()) throw new Error('수식이 들어 있는 칸은 시트에서 직접 고쳐 주세요.');
 
@@ -395,6 +438,11 @@ function addRow(token, sheetName, values) {
       sh.getRange(last, 1, 1, cols.length).copyTo(sh.getRange(row, 1, 1, cols.length), SpreadsheetApp.CopyPasteType.PASTE_DATA_VALIDATION, false);
     }
     const out = cols.map(c => {
+      if (c.serial) {
+        const nums = last > CONFIG.HEADER_ROW ? sh.getRange(CONFIG.HEADER_ROW + 1, c.i + 1, last - CONFIG.HEADER_ROW, 1).getValues().map(x => Number(x[0])).filter(n => isFinite(n)) : [];
+        return nums.length ? Math.max.apply(null, nums) + 1 : 1;
+      }
+      if (c.readonly || (c.adminOnly && user.role !== 'admin')) return '';
       const v = values ? values[c.i] : '';
       if (c.check) return v === true;
       return cleanInput_(v);
@@ -402,6 +450,118 @@ function addRow(token, sheetName, values) {
     sh.getRange(row, 1, 1, cols.length).setValues([out]);
     log_(user.name, '새 행 추가', sheetName + ' ' + row + '행');
     return row;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function toNumber_(v) {
+  if (typeof v === 'number') return v;
+  const s = String(v || '').replace(/[,\s원₩]/g, '');
+  const n = Number(s);
+  return s && isFinite(n) ? n : 0;
+}
+function toMonth_(v) {
+  if (v instanceof Date && !isNaN(v)) return Utilities.formatDate(v, ss_().getSpreadsheetTimeZone(), 'yyyy-MM');
+  const m = String(v || '').match(/(20\d{2})\s*[-./년]\s*(\d{1,2})/);
+  return m ? m[1] + '-' + ('0' + m[2]).slice(-2) : '';
+}
+
+/** 웹앱: 주문일 기준 월별 합계 (시트 전체 행) */
+function getSummary(token, sheetName) {
+  const user = auth_(token);
+  const sh = sheet_(sheetName);
+  const cols = columns_(sh);
+  const visible = c => !(c.adminOnly && user.role !== 'admin');
+  const monthCol = cols.find(c => has_(c.name, CONFIG.MONTH_KEYWORDS)) || cols.find(c => c.date && !c.pii);
+  if (!monthCol) throw new Error('주문일 열을 찾지 못했어요.');
+  const sumCols = cols.filter(c => visible(c) && !c.check && has_(c.name, CONFIG.SUM_KEYWORDS));
+  const groupCol = cols.find(c => visible(c) && has_(c.name, CONFIG.GROUP_KEYWORDS));
+  const settleCol = cols.find(c => c.settle);
+  const inv = cols.find(c => c.ship === 'invoice'), dat = cols.find(c => c.ship === 'date');
+  const settled = v => {
+    if (v === true) return true;
+    v = String(v).trim().toLowerCase();
+    return !!v && (CONFIG.SETTLED_VALUES.some(x => v === String(x).toLowerCase()) || v.indexOf('완료') >= 0);
+  };
+  const first = CONFIG.HEADER_ROW + 1, last = sh.getLastRow();
+  const months = {};
+  if (last >= first) {
+    const raw = sh.getRange(first, 1, last - first + 1, cols.length).getValues();
+    raw.forEach(r => {
+      const mo = toMonth_(r[monthCol.i]);
+      if (!mo) return;
+      const m = months[mo] || (months[mo] = { month: mo, count: 0, unshipped: 0, unsettled: 0, sums: sumCols.map(() => 0), unsettledSums: sumCols.map(() => 0), groups: {} });
+      m.count++;
+      const shipped = (inv && String(r[inv.i]).trim()) || (dat && String(r[dat.i]).trim());
+      if ((inv || dat) && !shipped) m.unshipped++;
+      const isSet = settleCol ? settled(r[settleCol.i]) : true;
+      if (!isSet) m.unsettled++;
+      sumCols.forEach((c, k) => {
+        const n = toNumber_(r[c.i]);
+        m.sums[k] += n;
+        if (!isSet) m.unsettledSums[k] += n;
+      });
+      if (groupCol) {
+        const g = String(r[groupCol.i] || '').trim() || '(빈칸)';
+        m.groups[g] = (m.groups[g] || 0) + 1;
+      }
+    });
+  }
+  const list = Object.keys(months).sort().reverse().map(k => months[k]);
+  return {
+    sumNames: sumCols.map(c => c.name),
+    monthName: monthCol.name,
+    groupName: groupCol ? groupCol.name : '',
+    hasSettle: !!settleCol,
+    hasShip: !!(inv || dat),
+    months: list,
+  };
+}
+
+function recentValues_(cols, rows, shipKind) {
+  const c = cols.find(x => x.ship === shipKind);
+  if (!c) return [];
+  const seen = [];
+  rows.forEach(r => { const v = String(r.v[c.i] || '').trim(); if (v && seen.indexOf(v) < 0 && seen.length < 6) seen.push(v); });
+  return seen;
+}
+
+/** 웹앱: 발송 처리 — 택배사·송장번호·발송일을 한 번에 채움 */
+function markShipped(token, sheetName, row, courier, invoice, dateStr) {
+  const user = auth_(token, true);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const sh = sheet_(sheetName);
+    const cols = columns_(sh);
+    row = Number(row);
+    if (!(row > CONFIG.HEADER_ROW && row <= sh.getLastRow())) throw new Error('잘못된 위치예요.');
+    const inv = cols.find(c => c.ship === 'invoice');
+    const cou = cols.find(c => c.ship === 'courier');
+    const dat = cols.find(c => c.ship === 'date');
+    invoice = String(invoice || '').trim();
+    if (inv && !invoice) throw new Error('송장번호를 넣어 주세요.');
+    if (inv) {
+      const cur = sh.getRange(row, inv.i + 1).getDisplayValue().trim();
+      if (cur && cur !== invoice) throw new Error('CONFLICT: 이미 다른 송장번호(' + cur + ')가 들어 있어요. 새로 불러올게요.');
+      sh.getRange(row, inv.i + 1).setValue(/^\d+$/.test(invoice) ? "'" + invoice : cleanInput_(invoice)); // 긴 숫자가 1.23E+11 로 바뀌지 않게
+    }
+    if (cou && String(courier || '').trim()) sh.getRange(row, cou.i + 1).setValue(cleanInput_(String(courier).trim()));
+    if (dat) {
+      const m = String(dateStr || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date();
+      const cell = sh.getRange(row, dat.i + 1);
+      // 같은 열 위쪽 칸의 날짜 모양(예: 2026-11-05, 11/5)을 그대로 따름
+      for (let r = row - 1; r > CONFIG.HEADER_ROW; r--) {
+        const above = sh.getRange(r, dat.i + 1);
+        if (above.getValue() instanceof Date) { cell.setNumberFormat(above.getNumberFormat()); break; }
+        if (row - r > 30) break;
+      }
+      cell.setValue(d);
+    }
+    log_(user.name, '발송 처리', sheetName + ' ' + row + '행 ' + (courier || '') + ' ' + invoice);
+    return true;
   } finally {
     lock.releaseLock();
   }
@@ -446,9 +606,11 @@ function onOpen() {
     .addItem('접속기록 보기', 'menuShowLog')
     .addItem('로그인 잠금 풀기', 'menuUnlock')
     .addSeparator()
-    .addItem('오래된 주문 개인정보 지금 파기', 'menuAnonymizeNow')
-    .addItem('개인정보 자동 파기 켜기 (매일 새벽)', 'menuAutoOn')
-    .addItem('개인정보 자동 파기 끄기', 'menuAutoOff')
+    .addItem('비식별: 정산 O + ' + CONFIG.ANON_AFTER_DAYS + '일 지난 주문 (지금)', 'menuAnonymizeNow')
+    .addItem('비식별: 정산 O 주문 전체 (기간 무시)', 'menuAnonymizeSettledAll')
+    .addItem('비식별: 모든 주문 전체 ⚠️', 'menuAnonymizeAll')
+    .addItem('비식별 자동 처리 켜기 (매일 새벽)', 'menuAutoOn')
+    .addItem('비식별 자동 처리 끄기', 'menuAutoOff')
     .addToUi();
 }
 
@@ -519,53 +681,151 @@ function menuUnlock() {
   SpreadsheetApp.getUi().alert('로그인 잠금을 풀었어요.');
 }
 
-function menuAnonymizeNow() {
+function menuAnonymizeNow() { anonymizeMenu_('rule'); }
+function menuAnonymizeSettledAll() { anonymizeMenu_('settled'); }
+function menuAnonymizeAll() { anonymizeMenu_('all'); }
+
+function anonymizeMenu_(mode) {
   const ui = SpreadsheetApp.getUi();
-  if (!CONFIG.ANONYMIZE_AFTER_DAYS) { ui.alert('Code.gs 의 ANONYMIZE_AFTER_DAYS 가 0 이라 꺼져 있어요.'); return; }
-  const ok = ui.alert('개인정보 파기', '주문일이 ' + CONFIG.ANONYMIZE_AFTER_DAYS + '일 넘게 지난 행의 이름·전화·주소를 "김*수 / 010-****-1234" 처럼 영구히 바꿉니다.\n되돌릴 수 없어요(시트 "버전 기록" 으로만 복구). 계속할까요?', ui.ButtonSet.YES_NO);
+  const desc = {
+    rule: '정산여부 O + 발송일(없으면 주문일)로부터 ' + CONFIG.ANON_AFTER_DAYS + '일 지난 주문',
+    settled: '정산여부 O 인 주문 전체 (' + CONFIG.ANON_AFTER_DAYS + '일 전이라도)',
+    all: '시트의 모든 주문 (정산·발송 여부 상관없이)',
+  }[mode];
+  const preview = anonymizeOld(true, mode);
+  if (!preview) { ui.alert('비식별 처리할 주문이 없어요.\n(' + desc + ')'); return; }
+  const ok = ui.alert('개인정보 비식별 처리',
+    desc + ' ' + preview + '건의\n성명 → 홍**, 휴대폰 → 010-****-****, 주소 → 시·군까지만, 우편번호·배송메모 → 삭제\n' +
+    '로 바꿉니다. 시트에서는 되돌릴 수 없어요(구글 "버전 기록" 으로만 복구). 계속할까요?', ui.ButtonSet.YES_NO);
   if (ok !== ui.Button.YES) return;
-  const n = anonymizeOld();
-  ui.alert(n + '칸을 파기했어요.');
+  if (mode === 'all') {
+    const r = ui.prompt('한 번 더 확인', '아직 발송 안 한 주문의 주소·연락처도 지워집니다.\n정말 하려면 "전체" 라고 입력하세요.', ui.ButtonSet.OK_CANCEL);
+    if (r.getSelectedButton() !== ui.Button.OK || r.getResponseText().trim() !== '전체') { ui.alert('취소했어요.'); return; }
+  }
+  ui.alert(anonymizeOld(false, mode) + '건을 비식별 처리했어요.');
 }
 
-/** 매일 실행: 오래된 주문의 개인정보 열을 가린 값으로 덮어씀 */
-function anonymizeOld() {
-  if (!CONFIG.ANONYMIZE_AFTER_DAYS) return 0;
-  const cutoff = Date.now() - CONFIG.ANONYMIZE_AFTER_DAYS * 86400000;
-  let count = 0;
-  allowedSheets_().forEach(name => {
-    const sh = ss_().getSheetByName(name);
-    const cols = columns_(sh);
-    const dateCol = cols.find(c => c.date && !c.pii);
-    const piiCols = cols.filter(c => c.pii);
-    const first = CONFIG.HEADER_ROW + 1, last = sh.getLastRow();
-    if (!dateCol || !piiCols.length || last < first) return;
-    const n = last - first + 1;
-    const dates = sh.getRange(first, dateCol.i + 1, n, 1).getValues();
-    piiCols.forEach(c => {
-      const rng = sh.getRange(first, c.i + 1, n, 1);
-      const vals = rng.getDisplayValues();
+/** 웹앱(관리자만): 고른 행을 기간과 상관없이 바로 비식별 처리 */
+function anonymizeRows(token, sheetName, rows) {
+  const user = auth_(token);
+  if (user.role !== 'admin') throw new Error('관리자만 할 수 있어요.');
+  sheet_(sheetName);
+  const set = {};
+  (rows || []).forEach(r => { set[Number(r)] = true; });
+  const n = anonymizeOld(false, 'rows', { sheet: sheetName, rows: set }, user.name);
+  return n;
+}
+
+function parseDate_(v) {
+  if (v instanceof Date && !isNaN(v)) return v;
+  const m = String(v || '').match(/(20\d{2})\s*[-./년]\s*(\d{1,2})\s*[-./월]\s*(\d{1,2})/);
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+}
+function isSettledValue_(v) {
+  if (v === true) return true;
+  v = String(v == null ? '' : v).trim().toLowerCase();
+  return !!v && (CONFIG.SETTLED_VALUES.some(x => v === String(x).toLowerCase()) || v.indexOf('완료') >= 0);
+}
+/** 비식별용 강한 가림 (화면용 가림보다 더 많이 지움) */
+function deidentify_(value, type) {
+  const v = String(value == null ? '' : value).trim();
+  if (!v) return v;
+  if (type === 'phone') { const d = v.replace(/\D/g, ''); return (d.length >= 8 ? d.slice(0, 3) : '***') + '-****-****'; }
+  if (type === 'name') return v[0] + '**';
+  if (type === 'address') { const p = v.split(/\s+/); return p.slice(0, 2).join(' ') + ' (비식별)'; }
+  return '(비식별)';
+}
+/** 일방향 암호화(HMAC-SHA256, 비밀키) — 원래 값은 복원할 수 없고, 같은 고객인지만 맞춰 볼 수 있음 */
+function customerKey_(phone, name) {
+  let key = props().getProperty('ANON_KEY');
+  if (!key) { key = randomToken_(); props().setProperty('ANON_KEY', key); }
+  const src = String(phone || '').replace(/\D/g, '') || String(name || '').replace(/\s/g, '');
+  if (!src) return '';
+  return hex_(Utilities.computeHmacSha256Signature(src, key)).slice(0, 20);
+}
+
+/** 매일 실행: 정산 완료 + N일 지난 주문의 개인정보를 비식별 처리. dryRun 이면 건수만 셈 */
+function anonymizeOld(dryRun, mode, pick, who) {
+  mode = typeof mode === 'string' ? mode : 'rule'; // 'rule' | 'settled' | 'all' | 'rows'
+  if (dryRun !== true) dryRun = false;               // 트리거가 이벤트 객체를 넘겨도 실제 실행
+  if (mode === 'rule' && !CONFIG.ANON_AFTER_DAYS) return 0;
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const now = new Date();
+    let total = 0;
+    const records = [];
+    allowedSheets_().forEach(name => {
+      if (mode === 'rows' && name !== pick.sheet) return;
+      const sh = ss_().getSheetByName(name);
+      const cols = columns_(sh);
+      const piiCols = cols.filter(c => c.pii);
+      const clearCols = cols.filter(c => !c.pii && has_(c.name, CONFIG.ANON_CLEAR_KEYWORDS));
+      const baseCols = CONFIG.ANON_BASE_KEYWORDS.map(k => cols.find(c => has_(c.name, [k]))).filter(Boolean);
+      const settleCol = cols.find(c => c.settle);
+      const orderNoCol = cols.find(c => has_(c.name, ['주문번호']));
+      const phoneCol = cols.find(c => c.pii === 'phone');
+      const nameCol = cols.find(c => c.pii === 'name');
+      const first = CONFIG.HEADER_ROW + 1, last = sh.getLastRow();
+      if (!piiCols.length || last < first) return;
+      if (mode === 'rule' && !baseCols.length) return;
+      if ((mode === 'rule' || mode === 'settled') && CONFIG.ANON_REQUIRE_SETTLED && !settleCol) return;
+      const n = last - first + 1;
+      const rng = sh.getRange(first, 1, n, cols.length);
+      const raw = rng.getValues();
+      const disp = rng.getDisplayValues();
       const forms = rng.getFormulas();
-      let changed = false;
+      const targets = [];
       for (let r = 0; r < n; r++) {
-        const d = dates[r][0] instanceof Date ? dates[r][0] : new Date(dates[r][0]);
-        if (isNaN(d) || d.getTime() > cutoff || !vals[r][0] || forms[r][0]) continue;
-        const m = mask_(vals[r][0], c.pii);
-        if (m !== vals[r][0]) { vals[r][0] = m; changed = true; count++; }
+        if (mode === 'rows' && !pick.rows[first + r]) continue;
+        if ((mode === 'rule' || mode === 'settled') && CONFIG.ANON_REQUIRE_SETTLED && !isSettledValue_(raw[r][settleCol.i])) continue;
+        if (mode === 'rule') {
+          let base = null;
+          for (const bc of baseCols) { base = parseDate_(raw[r][bc.i]); if (base) break; }
+          if (!base) continue;
+          const due = new Date(base.getFullYear(), base.getMonth(), base.getDate() + CONFIG.ANON_AFTER_DAYS);
+          if (due > now) continue;
+        }
+        const work = piiCols.concat(clearCols).filter(c => !forms[r][c.i] && String(disp[r][c.i]).trim() && !/\(비식별\)|\*\*\*\*-\*\*\*\*|^.\*\*$/.test(String(disp[r][c.i])));
+        if (work.length) targets.push({ r: r, work: work });
       }
-      if (changed) rng.setValues(vals);
+      total += targets.length;
+      if (dryRun || !targets.length) return;
+      targets.forEach(t => {
+        const r = t.r;
+        records.push([now, name, orderNoCol ? disp[r][orderNoCol.i] : '', first + r,
+          customerKey_(phoneCol ? disp[r][phoneCol.i] : '', nameCol ? disp[r][nameCol.i] : ''),
+          t.work.map(c => c.name).join(', '),
+          { rule: CONFIG.ANON_AFTER_DAYS + '일 자동', settled: '정산 완료 전체', all: '전체', rows: '웹앱에서 선택 (' + (who || '') + ')' }[mode]]);
+        t.work.forEach(c => {
+          const v = clearCols.indexOf(c) >= 0 ? '' : deidentify_(disp[r][c.i], c.pii);
+          sh.getRange(first + r, c.i + 1).setValue(v);
+        });
+      });
     });
-  });
-  if (count) log_('자동', '개인정보 파기', count + '칸');
-  return count;
+    if (!dryRun && records.length) {
+      let ash = ss_().getSheetByName(CONFIG.ANON_SHEET);
+      if (!ash) {
+        ash = ss_().insertSheet(CONFIG.ANON_SHEET);
+        ash.appendRow(['처리 시각', '시트', '주문번호', '행', '고객키(일방향 암호화)', '처리한 열', '방식']);
+        ash.setFrozenRows(1);
+        ash.hideSheet();
+      }
+      ash.getRange(ash.getLastRow() + 1, 1, records.length, records[0].length).setValues(records);
+      log_(who || '시트 주인/자동', '개인정보 비식별 처리', records.length + '건 (' + mode + ')');
+    }
+    return total;
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function menuAutoOn() {
   menuAutoOff(true);
   ScriptApp.newTrigger('anonymizeOld').timeBased().everyDays(1).atHour(4).create();
-  SpreadsheetApp.getUi().alert('매일 새벽 4시쯤 ' + CONFIG.ANONYMIZE_AFTER_DAYS + '일 지난 주문의 개인정보를 파기합니다.');
+  SpreadsheetApp.getUi().alert('매일 새벽 4시쯤, 정산여부 O + ' + CONFIG.ANON_AFTER_DAYS + '일 지난 주문의 개인정보를 비식별 처리합니다.');
 }
 function menuAutoOff(silent) {
   ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'anonymizeOld').forEach(t => ScriptApp.deleteTrigger(t));
-  if (silent !== true) SpreadsheetApp.getUi().alert('자동 파기를 껐어요.');
+  if (silent !== true) SpreadsheetApp.getUi().alert('비식별 자동 처리를 껐어요.');
 }
