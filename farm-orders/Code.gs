@@ -36,6 +36,19 @@ const CONFIG = {
   // 암호화는 시트 메뉴 "🔒 개인정보 암호화 켜기" 로 켭니다.
   ENC_EXTRA_KEYWORDS: ['배송메모'],
 
+  // ── 역할 ──
+  // 관리자(나): 모든 기능. 편집(부모님): 발송 작업(아래 열만 고칠 수 있음) + 실적·정산·계산서 확인.
+  // 개인정보 "보기"·수정, 주문 추가, 정산여부 변경은 관리자만.
+  EDITOR_EDIT_KEYWORDS: ['택배사', '송장번호', '발송일'],
+
+  // ── 정산 · 계산서 ──
+  SETTLE_AMOUNT_KEYWORDS: ['인삼대금'],          // 부모님께 정산하는 금액 열 (계산서 금액)
+  TAX_TAXED_KEYWORDS: ['홍삼'],                  // 구분에 이 단어가 있으면 과세 → 세금계산서
+  TAX_FREE_KEYWORDS: ['수삼', '건삼', '인삼', '삼'], // 위에 안 걸리고 이 단어가 있으면 면세 → 계산서
+  TAX_VAT_INCLUDED: true,                        // 금액이 부가세 포함이면 true (공급가액 = 금액 ÷ 1.1)
+  REPORT_MONTHLY_SHEET: '월별정산',
+  REPORT_DETAIL_SHEET: '정산내역',
+
   // 이 단어가 머리글에 있으면 웹앱에서 고치지 못하게 함
   READONLY_KEYWORDS: ['순번', '주문번호'],
 
@@ -295,6 +308,13 @@ function auth_(token, needEdit) {
 /* 기기 승인 · 접속 시간 · 알림 설정                                    */
 /* ------------------------------------------------------------------ */
 
+/** 이 사용자가 이 열을 웹앱에서 고칠 수 있는지 */
+function canEditCol_(user, col) {
+  if (!col || col.readonly || user.role === 'viewer') return false;
+  if (user.role === 'admin') return true;
+  return !!col.editorEdit && !col.enc && !col.pii;
+}
+
 function deviceKey_(userId, deviceId) { return sha_(userId + ':' + deviceId).slice(0, 24); }
 function getDevices_() {
   const d = JSON.parse(props().getProperty('DEVICES') || '{}');
@@ -484,7 +504,7 @@ function ss_() { return SpreadsheetApp.getActiveSpreadsheet(); }
 
 function allowedSheets_() {
   return ss_().getSheets()
-    .filter(s => s.getName() !== CONFIG.LOG_SHEET && s.getName() !== CONFIG.ANON_SHEET && !s.isSheetHidden())
+    .filter(s => [CONFIG.LOG_SHEET, CONFIG.ANON_SHEET, CONFIG.REPORT_MONTHLY_SHEET, CONFIG.REPORT_DETAIL_SHEET].indexOf(s.getName()) < 0 && !s.isSheetHidden())
     .filter(s => !CONFIG.SHEETS.length || CONFIG.SHEETS.indexOf(s.getName()) >= 0)
     .map(s => s.getName());
 }
@@ -540,6 +560,7 @@ function columns_(sh) {
       settle: has_(h, CONFIG.SETTLE_KEYWORDS),
       serial: has_(h, CONFIG.SERIAL_KEYWORDS),
       enc: !!piiType_(h) || has_(h, CONFIG.ENC_EXTRA_KEYWORDS),
+      editorEdit: has_(h, CONFIG.EDITOR_EDIT_KEYWORDS),
     };
   });
 }
@@ -613,8 +634,10 @@ function getData(token, sheetName) {
     user: { name: user.name, role: user.role, roleName: ROLES[user.role] },
     sheets: names,
     sheet: name,
-    cols: cols.filter((c, i) => !hide[i]),
+    cols: cols.filter((c, i) => !hide[i]).map(c => Object.assign({}, c, { editable: canEditCol_(user, c) })),
     rows: rows,
+    canAdd: user.role === 'admin',
+    anonDays: CONFIG.ANON_AFTER_DAYS,
     couriers: recentValues_(cols, rows, 'courier'),
     settleMark: CONFIG.SETTLE_MARK,
     settledValues: CONFIG.SETTLED_VALUES,
@@ -638,6 +661,7 @@ function logOpened_(user, sheetName, rows) {
 /** 웹앱: 가려진 칸 하나를 잠깐 보기 (기록이 남음) */
 function reveal(token, sheetName, row, colIdx) {
   const user = auth_(token);
+  if (user.role !== 'admin') throw new Error('개인정보 확인은 관리자만 할 수 있어요.');
   const sh = sheet_(sheetName);
   row = Number(row); colIdx = Number(colIdx);
   if (!(row > CONFIG.HEADER_ROW && row <= sh.getLastRow()) || !(colIdx >= 0 && colIdx < sh.getLastColumn())) throw new Error('잘못된 위치예요.');
@@ -1087,6 +1111,7 @@ function updateCell(token, sheetName, row, colIdx, oldValue, newValue) {
     const col = cols[colIdx];
     if (!col || !(row > CONFIG.HEADER_ROW && row <= sh.getLastRow())) throw new Error('잘못된 위치예요.');
     if (col.readonly) throw new Error('이 칸은 웹앱에서 고칠 수 없어요.');
+    if (!canEditCol_(user, col)) throw new Error('이 칸은 관리자만 고칠 수 있어요.');
     if (col.adminOnly && user.role !== 'admin') throw new Error('고칠 수 없는 칸이에요.');
     const cell = sh.getRange(row, colIdx + 1);
     if (cell.getFormula()) throw new Error('수식이 들어 있는 칸은 시트에서 직접 고쳐 주세요.');
@@ -1126,6 +1151,7 @@ function updateCell(token, sheetName, row, colIdx, oldValue, newValue) {
 /** 웹앱: 새 행 추가 (values: {열번호: 값}) */
 function addRow(token, sheetName, values) {
   const user = auth_(token, true);
+  if (user.role !== 'admin') throw new Error('주문 추가는 관리자만 할 수 있어요.');
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
@@ -1175,56 +1201,194 @@ function toMonth_(v) {
   return m ? m[1] + '-' + ('0' + m[2]).slice(-2) : '';
 }
 
-/** 웹앱: 주문일 기준 월별 합계 (시트 전체 행) */
-function getSummary(token, sheetName) {
-  const user = auth_(token);
-  const sh = sheet_(sheetName);
-  const cols = columns_(sh);
-  const visible = c => !(c.adminOnly && user.role !== 'admin');
-  const monthCol = cols.find(c => has_(c.name, CONFIG.MONTH_KEYWORDS)) || cols.find(c => c.date && !c.pii);
-  if (!monthCol) throw new Error('주문일 열을 찾지 못했어요.');
-  const sumCols = cols.filter(c => visible(c) && !c.check && has_(c.name, CONFIG.SUM_KEYWORDS));
-  const groupCol = cols.find(c => visible(c) && has_(c.name, CONFIG.GROUP_KEYWORDS));
-  const settleCol = cols.find(c => c.settle);
-  const inv = cols.find(c => c.ship === 'invoice'), dat = cols.find(c => c.ship === 'date');
-  const settled = v => {
-    if (v === true) return true;
-    v = String(v).trim().toLowerCase();
-    return !!v && (CONFIG.SETTLED_VALUES.some(x => v === String(x).toLowerCase()) || v.indexOf('완료') >= 0);
-  };
-  const first = CONFIG.HEADER_ROW + 1, last = sh.getLastRow();
+function taxType_(text) {
+  if (has_(text, CONFIG.TAX_TAXED_KEYWORDS)) return '과세';
+  if (has_(text, CONFIG.TAX_FREE_KEYWORDS)) return '면세';
+  return '확인 필요';
+}
+function splitVat_(total) {
+  if (CONFIG.TAX_VAT_INCLUDED) { const supply = Math.round(total / 1.1); return { supply: supply, vat: total - supply, total: total }; }
+  const vat = Math.round(total * 0.1); return { supply: total, vat: vat, total: total + vat };
+}
+
+/** 주문 시트들을 주문일 기준 월별로 모음 (개인정보 열은 읽지 않음) */
+function aggregate_(user, sheetNames) {
+  const visible = c => !(c.adminOnly && (!user || user.role !== 'admin'));
+  const tz = ss_().getSpreadsheetTimeZone();
   const months = {};
-  if (last >= first) {
-    const raw = sh.getRange(first, 1, last - first + 1, cols.length).getValues();
-    raw.forEach(r => {
+  let meta = null;
+  sheetNames.forEach(name => {
+    const sh = ss_().getSheetByName(name);
+    const cols = columns_(sh);
+    const monthCol = cols.find(c => has_(c.name, CONFIG.MONTH_KEYWORDS)) || cols.find(c => c.date && !c.pii);
+    if (!monthCol) return;
+    const sumCols = cols.filter(c => visible(c) && !c.check && has_(c.name, CONFIG.SUM_KEYWORDS));
+    const amtCol = cols.find(c => visible(c) && has_(c.name, CONFIG.SETTLE_AMOUNT_KEYWORDS)) || sumCols[0];
+    const groupCol = cols.find(c => visible(c) && has_(c.name, CONFIG.GROUP_KEYWORDS));
+    const sizeCol = cols.find(c => has_(c.name, ['용량', '중량', '옵션']));
+    const noCol = cols.find(c => has_(c.name, ['주문번호']));
+    const serialCol = cols.find(c => c.serial);
+    const settleCol = cols.find(c => c.settle);
+    const inv = cols.find(c => c.ship === 'invoice'), dat = cols.find(c => c.ship === 'date'), cou = cols.find(c => c.ship === 'courier');
+    if (!meta) meta = { sumNames: sumCols.map(c => c.name), amtName: amtCol ? amtCol.name : '', monthName: monthCol.name,
+      groupName: groupCol ? groupCol.name : '', hasSettle: !!settleCol, hasShip: !!(inv || dat) };
+    const first = CONFIG.HEADER_ROW + 1, last = sh.getLastRow();
+    if (last < first) return;
+    const rng = sh.getRange(first, 1, last - first + 1, cols.length);
+    const raw = rng.getValues(), disp = rng.getDisplayValues();
+    raw.forEach((r, i) => {
       const mo = toMonth_(r[monthCol.i]);
       if (!mo) return;
-      const m = months[mo] || (months[mo] = { month: mo, count: 0, unshipped: 0, unsettled: 0, sums: sumCols.map(() => 0), unsettledSums: sumCols.map(() => 0), groups: {} });
+      const m = months[mo] || (months[mo] = { month: mo, count: 0, shipped: 0, unshipped: 0, unsettled: 0,
+        sums: meta.sumNames.map(() => 0), unsettledSums: meta.sumNames.map(() => 0), groups: {},
+        amt: { total: 0, settled: 0, unsettled: 0 }, tax: { taxed: 0, free: 0, unknown: 0 }, items: {}, orders: [] });
       m.count++;
-      const shipped = (inv && String(r[inv.i]).trim()) || (dat && String(r[dat.i]).trim());
-      if ((inv || dat) && !shipped) m.unshipped++;
-      const isSet = settleCol ? settled(r[settleCol.i]) : true;
+      const shipped = !!((inv && String(r[inv.i]).trim()) || (dat && String(r[dat.i]).trim()));
+      if (meta.hasShip) { if (shipped) m.shipped++; else m.unshipped++; }
+      const isSet = settleCol ? isSettledValue_(r[settleCol.i]) : true;
       if (!isSet) m.unsettled++;
-      sumCols.forEach((c, k) => {
+      sumCols.forEach(c => {
+        const k = meta.sumNames.indexOf(c.name);
+        if (k < 0) return;
         const n = toNumber_(r[c.i]);
         m.sums[k] += n;
         if (!isSet) m.unsettledSums[k] += n;
       });
-      if (groupCol) {
-        const g = String(r[groupCol.i] || '').trim() || '(빈칸)';
-        m.groups[g] = (m.groups[g] || 0) + 1;
-      }
+      const g = groupCol ? (String(r[groupCol.i] || '').trim() || '(빈칸)') : '';
+      if (groupCol) m.groups[g] = (m.groups[g] || 0) + 1;
+      const size = sizeCol ? String(disp[i][sizeCol.i] || '').trim() : '';
+      const amt = amtCol ? toNumber_(r[amtCol.i]) : 0;
+      const tt = taxType_(g + ' ' + size);
+      m.amt.total += amt; if (isSet) m.amt.settled += amt; else m.amt.unsettled += amt;
+      m.tax[tt === '과세' ? 'taxed' : tt === '면세' ? 'free' : 'unknown'] += amt;
+      const itemKey = (g + ' ' + size).trim() || '(구분 없음)';
+      const it = m.items[itemKey] || (m.items[itemKey] = { n: 0, amt: 0, tax: tt });
+      it.n++; it.amt += amt;
+      const od = r[monthCol.i] instanceof Date ? Utilities.formatDate(r[monthCol.i], tz, 'yyyy-MM-dd') : String(disp[i][monthCol.i]);
+      m.orders.push({ d: od, no: noCol ? String(disp[i][noCol.i]) : '', sn: serialCol ? String(disp[i][serialCol.i]) : '',
+        item: g, size: size, amt: amt, tax: tt, settled: isSet, shipped: shipped,
+        sd: dat ? (r[dat.i] instanceof Date ? Utilities.formatDate(r[dat.i], tz, 'yyyy-MM-dd') : String(disp[i][dat.i])) : '',
+        cou: cou ? String(disp[i][cou.i]) : '', inv: inv ? String(disp[i][inv.i]) : '',
+        sums: sumCols.map(c => toNumber_(r[c.i])) });
     });
+  });
+  const list = Object.keys(months).sort().reverse().map(k => {
+    const m = months[k];
+    m.orders.sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0));
+    m.vat = splitVat_(m.tax.taxed);
+    return m;
+  });
+  return Object.assign({ months: list }, meta || { sumNames: [], amtName: '', monthName: '주문일', groupName: '', hasSettle: false, hasShip: false });
+}
+
+/** 웹앱: 주문일 기준 월별 합계 + 정산·계산서 정보 (개인정보 없음) */
+function getSummary(token, sheetName) {
+  const user = auth_(token);
+  sheet_(sheetName);
+  const r = aggregate_(user, [sheetName]);
+  r.vatIncluded = CONFIG.TAX_VAT_INCLUDED;
+  r.canBuild = user.role === 'admin';
+  return r;
+}
+
+/* ------------------------------------------------------------------ */
+/* 월별 정산 시트 (월별정산 · 정산내역) — 개인정보 없이 만듦              */
+/* ------------------------------------------------------------------ */
+
+function reportSheet_(name) {
+  let sh = ss_().getSheetByName(name);
+  if (!sh) sh = ss_().insertSheet(name);
+  sh.clear();
+  sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns()).clearDataValidations();
+  return sh;
+}
+
+/** 월별정산 · 정산내역 시트를 새로 만듦. 매일 새벽 자동 + 메뉴 + 웹앱 버튼 */
+function buildReports() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const agg = aggregate_({ role: 'admin' }, allowedSheets_());
+    const tz = ss_().getSpreadsheetTimeZone();
+    const now = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm');
+    const S = agg.sumNames, A = agg.amtName || '금액';
+
+    // ── 월별정산 ──
+    const ms = reportSheet_(CONFIG.REPORT_MONTHLY_SHEET);
+    const head = ['월', '주문', '발송완료', '발송 전'].concat(S).concat([
+      '정산완료 ' + A, '미정산 ' + A, '미정산 건수',
+      '과세 합계', '과세 공급가액', '과세 세액', '면세(계산서)', '과세구분 확인 필요', (agg.groupName || '구분') + '별 건수']);
+    const rows = [];
+    const years = {};
+    const lineOf = (label, m) => [label, m.count, m.shipped, m.unshipped].concat(m.sums).concat([
+      m.amt.settled, m.amt.unsettled, m.unsettled, m.tax.taxed, m.vat.supply, m.vat.vat, m.tax.free, m.tax.unknown,
+      Object.keys(m.groups).map(g => g + ' ' + m.groups[g]).join(', ')]);
+    agg.months.forEach(m => {
+      const p = m.month.split('-');
+      rows.push(lineOf(p[0] + '년 ' + Number(p[1]) + '월', m));
+      const Y = years[p[0]] || (years[p[0]] = { count: 0, shipped: 0, unshipped: 0, unsettled: 0, sums: S.map(() => 0),
+        amt: { settled: 0, unsettled: 0 }, tax: { taxed: 0, free: 0, unknown: 0 }, groups: {} });
+      Y.count += m.count; Y.shipped += m.shipped; Y.unshipped += m.unshipped; Y.unsettled += m.unsettled;
+      m.sums.forEach((v, k) => { Y.sums[k] += v; });
+      Y.amt.settled += m.amt.settled; Y.amt.unsettled += m.amt.unsettled;
+      ['taxed', 'free', 'unknown'].forEach(k => { Y.tax[k] += m.tax[k]; });
+      Object.keys(m.groups).forEach(g => { Y.groups[g] = (Y.groups[g] || 0) + m.groups[g]; });
+    });
+    const yearRows = Object.keys(years).sort().reverse().map(y => { const Y = years[y]; Y.vat = splitVat_(Y.tax.taxed); return lineOf(y + '년 합계', Y); });
+    ms.getRange(1, 1).setValue('월별 정산 (' + agg.monthName + ' 기준) · 마지막 갱신 ' + now + ' · 개인정보 없음 · 이 시트는 자동으로 다시 만들어지니 직접 고치지 마세요')
+      .setFontWeight('bold');
+    ms.getRange(2, 1).setValue('과세/면세는 ' + (agg.groupName || '구분') + ' 글자로 나눈 참고값입니다. 계산서 발행 전에 확인하세요. 공급가액·세액은 ' + (CONFIG.TAX_VAT_INCLUDED ? '부가세 포함 금액 기준' : '부가세 별도 금액 기준') + '.')
+      .setFontColor('#666666');
+    ms.getRange(3, 1, 1, head.length).setValues([head]).setFontWeight('bold').setBackground('#e8f3e8').setWrap(true);
+    ms.setFrozenRows(3);
+    const all = rows.concat(yearRows.length ? [head.map(() => '')] : []).concat(yearRows);
+    if (all.length) {
+      ms.getRange(4, 1, all.length, head.length).setValues(all);
+      ms.getRange(4, 2, all.length, head.length - 2).setNumberFormat('#,##0');
+      if (yearRows.length) ms.getRange(4 + rows.length + 1, 1, yearRows.length, head.length).setFontWeight('bold').setBackground('#f3f5f2');
+    }
+    ms.setColumnWidth(1, 110);
+    ms.setColumnWidth(head.length, 260);
+
+    // ── 정산내역 ──
+    const ds = reportSheet_(CONFIG.REPORT_DETAIL_SHEET);
+    const dh = ['월', '주문일', '순번', '주문번호', agg.groupName || '구분', '용량', '발송일', '택배사', '송장번호'].concat(S).concat(['과세구분', '정산']);
+    ds.getRange(1, 1).setValue('정산 내역 (주문별, 개인정보 없음) · 마지막 갱신 ' + now).setFontWeight('bold');
+    ds.getRange(2, 1, 1, dh.length).setValues([dh]).setFontWeight('bold').setBackground('#e8f3e8');
+    ds.setFrozenRows(2);
+    const out = [], bold = [];
+    agg.months.forEach(m => {
+      const p = m.month.split('-'), label = p[0] + '년 ' + Number(p[1]) + '월';
+      m.orders.forEach(o => out.push([label, o.d, o.sn, o.no, o.item, o.size, o.sd, o.cou, o.inv].concat(o.sums).concat([o.tax, o.settled ? '완료' : '미정산'])));
+      bold.push(out.length);
+      out.push([label + ' 소계', m.count + '건', '', '', '', '', '', '', ''].concat(m.sums).concat(['', '미정산 ' + m.unsettled + '건']));
+    });
+    if (out.length) {
+      ds.getRange(3, 1, out.length, 9).setNumberFormat('@');                       // 주문번호·송장번호 등 글자 그대로
+      ds.getRange(3, 10 + S.length, out.length, 2).setNumberFormat('@');
+      if (S.length) ds.getRange(3, 10, out.length, S.length).setNumberFormat('#,##0');
+      ds.getRange(3, 1, out.length, dh.length).setValues(out.map(r => r.map((v, k) => (k >= 9 && k < 9 + S.length ? v : String(v)))));
+      bold.forEach(i => ds.getRange(3 + i, 1, 1, dh.length).setFontWeight('bold').setBackground('#f3f5f2'));
+    }
+    log_('자동', '월별 정산 시트 갱신', agg.months.length + '개월');
+    return agg.months.length;
+  } finally {
+    lock.releaseLock();
   }
-  const list = Object.keys(months).sort().reverse().map(k => months[k]);
-  return {
-    sumNames: sumCols.map(c => c.name),
-    monthName: monthCol.name,
-    groupName: groupCol ? groupCol.name : '',
-    hasSettle: !!settleCol,
-    hasShip: !!(inv || dat),
-    months: list,
-  };
+}
+
+/** 웹앱(관리자): 정산 시트 지금 갱신 */
+function buildReportsWeb(token) {
+  requireAdmin_(token);
+  return buildReports();
+}
+
+function menuBuildReports() {
+  const n = buildReports();
+  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'buildReports').forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('buildReports').timeBased().everyDays(1).atHour(5).create();
+  ss_().setActiveSheet(ss_().getSheetByName(CONFIG.REPORT_MONTHLY_SHEET));
+  SpreadsheetApp.getUi().alert('월별정산 · 정산내역 시트를 만들었어요 (' + n + '개월).\n앞으로 매일 새벽 5시쯤 자동으로 다시 만들어요.\n웹앱 📊 월별 합계 화면의 "정산 시트 갱신" 으로 바로 갱신할 수도 있어요.');
 }
 
 function recentValues_(cols, rows, shipKind) {
@@ -1296,6 +1460,7 @@ function log_(who, action, detail) {
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('🔐 주문관리')
     .addItem('📋 주문 시트 양식 만들기', 'menuSetupTemplate')
+    .addItem('📊 월별 정산 시트 만들기 (매일 자동 갱신)', 'menuBuildReports')
     .addSeparator()
     .addItem('사용자 추가 / PIN 바꾸기', 'menuAddUser')
     .addItem('사용자 목록 · 삭제', 'menuUsers')
@@ -1316,6 +1481,7 @@ function onOpen() {
     .addItem('비식별: 정산 O + ' + CONFIG.ANON_AFTER_DAYS + '일 지난 주문 (지금)', 'menuAnonymizeNow')
     .addItem('비식별: 정산 O 주문 전체 (기간 무시)', 'menuAnonymizeSettledAll')
     .addItem('비식별: 모든 주문 전체 ⚠️', 'menuAnonymizeAll')
+    .addItem('비식별: 시트에서 선택한 행만', 'menuAnonymizeSelected')
     .addItem('비식별 자동 처리 켜기 (매일 새벽)', 'menuAutoOn')
     .addItem('비식별 자동 처리 끄기', 'menuAutoOff')
     .addToUi();
@@ -1499,6 +1665,50 @@ function menuUnlock() {
 }
 
 function menuAnonymizeNow() { anonymizeMenu_('rule'); }
+
+/** 시트에서 마우스로 고른 행(여러 군데 Ctrl+클릭 가능)만 비식별 처리 */
+function menuAnonymizeSelected() {
+  const ui = SpreadsheetApp.getUi();
+  const sh = ss_().getActiveSheet();
+  if (allowedSheets_().indexOf(sh.getName()) < 0) { ui.alert('주문 시트에서 행을 골라 주세요.'); return; }
+  const set = {}, list = [];
+  const ranges = sh.getActiveRangeList() ? sh.getActiveRangeList().getRanges() : [sh.getActiveRange()];
+  ranges.forEach(rg => {
+    for (let r = Math.max(rg.getRow(), CONFIG.HEADER_ROW + 1); r <= Math.min(rg.getLastRow(), sh.getLastRow()); r++) {
+      if (!set[r]) { set[r] = true; list.push(r); }
+    }
+  });
+  if (!list.length) {
+    ui.alert('비식별할 행을 먼저 고르세요.\n\n· 왼쪽 행 번호를 누르면 한 줄 전체 선택\n· Shift+클릭으로 여러 줄, Ctrl+클릭으로 떨어진 줄 추가\n· 그다음 이 메뉴를 다시 누르세요.');
+    return;
+  }
+  const cols = columns_(sh);
+  const inv = cols.find(c => c.ship === 'invoice'), dat = cols.find(c => c.ship === 'date'), st = cols.find(c => c.settle);
+  const titles = cols.filter(c => c.title);
+  let notShipped = 0, notSettled = 0;
+  const lines = list.slice(0, 12).map(r => {
+    const v = sh.getRange(r, 1, 1, cols.length).getDisplayValues()[0];
+    const shipped = (inv && v[inv.i].trim()) || (dat && v[dat.i].trim());
+    const settled = st ? isSettledValue_(sh.getRange(r, st.i + 1).getValue()) : true;
+    return r + '행  ' + titles.map(c => v[c.i]).filter(String).join(' · ') + (shipped ? '' : '  [발송 전]') + (settled ? '' : '  [정산 전]');
+  });
+  list.forEach(r => {
+    const v = sh.getRange(r, 1, 1, cols.length).getDisplayValues()[0];
+    if ((inv || dat) && !((inv && v[inv.i].trim()) || (dat && v[dat.i].trim()))) notShipped++;
+    if (st && !isSettledValue_(sh.getRange(r, st.i + 1).getValue())) notSettled++;
+  });
+  const n = anonymizeOld(true, 'rows', { sheet: sh.getName(), rows: set });
+  if (!n) { ui.alert('고른 ' + list.length + '줄은 이미 비식별됐거나 개인정보가 비어 있어요.'); return; }
+  let msg = '고른 ' + list.length + '줄 중 ' + n + '건을 비식별 처리합니다.\n\n' + lines.join('\n') + (list.length > 12 ? '\n… 외 ' + (list.length - 12) + '줄' : '');
+  if (notShipped) msg += '\n\n⚠️ 발송 전 ' + notShipped + '건 — 주소가 지워지면 보낼 수 없어요.';
+  if (notSettled) msg += '\n⚠️ 정산 전 ' + notSettled + '건';
+  if (ui.alert('선택한 행 비식별 처리', msg + '\n\n되돌릴 수 없어요. 계속할까요?', ui.ButtonSet.YES_NO) !== ui.Button.YES) return;
+  if (notShipped) {
+    const r = ui.prompt('한 번 더 확인', '발송 전 주문이 있어요. 정말 하려면 "비식별" 이라고 입력하세요.', ui.ButtonSet.OK_CANCEL);
+    if (r.getSelectedButton() !== ui.Button.OK || r.getResponseText().trim() !== '비식별') { ui.alert('취소했어요.'); return; }
+  }
+  ui.alert(anonymizeOld(false, 'rows', { sheet: sh.getName(), rows: set }, '시트 주인') + '건을 비식별 처리했어요.');
+}
 function menuAnonymizeSettledAll() { anonymizeMenu_('settled'); }
 function menuAnonymizeAll() { anonymizeMenu_('all'); }
 

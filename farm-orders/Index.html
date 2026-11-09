@@ -94,9 +94,31 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
 .selbtns{display:flex;gap:8px}
 .selbtns button{flex:1;padding:12px 6px;border-radius:12px;border:1px solid var(--line);background:var(--card);font-weight:600}
 .selbtns .danger{background:#b3261e;border-color:#b3261e;color:#fff}
-.card.sel{outline:3px solid #b3261e}
-.pick{display:flex;align-items:center;gap:8px;margin:-2px 0 8px;font-weight:600;color:#b3261e}
-.pick input{width:24px;height:24px}
+body.selecting main{padding-bottom:300px}
+.selbanner{margin-top:10px;background:#b3261e;color:#fff;border-radius:12px;padding:10px 12px;font-weight:700;font-size:.95rem}
+.selhead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.selhead b{font-size:1.15rem;color:#b3261e}
+.selhead span{color:var(--sub);font-size:.85rem}
+.quick{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:2px}
+.quick button{flex:0 0 auto;border:1px solid var(--line);background:var(--bg);border-radius:999px;padding:7px 12px;font-size:.88rem;font-weight:600}
+.quick button .n{color:var(--sub);font-weight:400;margin-left:3px}
+.selbtns .danger:disabled{opacity:.45}
+.card.pickable{cursor:pointer;user-select:none;-webkit-user-select:none;transition:background .12s}
+.card.pickable:active{transform:scale(.99)}
+.card.sel{outline:3px solid #b3261e;background:rgba(179,38,30,.07)}
+.card.anon{opacity:.5;cursor:not-allowed}
+.pickrow{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+.tick{flex:0 0 auto;width:34px;height:34px;border-radius:50%;border:2.5px solid #b3261e;display:flex;align-items:center;justify-content:center;font-size:1.2rem;font-weight:900;color:transparent;background:var(--card)}
+.card.sel .tick{background:#b3261e;color:#fff}
+.card.anon .tick{border-color:var(--line);color:var(--sub);background:var(--chip)}
+.picktxt{font-weight:800;color:#b3261e}
+.card.anon .picktxt{color:var(--sub)}
+.tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+.tag{font-size:.78rem;padding:2px 8px;border-radius:999px;background:var(--chip);color:var(--sub);font-weight:600}
+.tag.ok{background:var(--soft);color:var(--brand)}
+.tag.no{background:#fde8e6;color:#a3261e}
+.tag.old{background:#fff3c4;color:#6b5300}
+.who{color:var(--sub);font-size:.92rem}
 #waitDev{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 16px;text-align:center}
 .wait .big{font-size:3rem}
 .wait h1{font-size:1.3rem;margin:8px 0}
@@ -137,6 +159,15 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
 .shipform .go{display:block;width:100%;margin-top:12px;padding:15px;border:none;border-radius:14px;background:var(--brand);color:var(--brand-ink);font-size:1.12rem;font-weight:800}
 .linkcopy{border:1px dashed var(--line);background:none;border-radius:10px;padding:6px 10px;font-size:.85rem;color:var(--sub)}
 .card.focus{outline:3px solid #e0a100}
+.invbox{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
+.invh{font-weight:800;margin:12px 0 4px;color:var(--brand)}
+.invh.warn{color:#a3261e}
+.otable{width:100%;border-collapse:collapse;font-size:.88rem;margin-top:4px}
+.otable th,.otable td{border-bottom:1px solid var(--line);padding:6px 4px;text-align:left}
+.otable th{color:var(--sub);font-weight:600}
+.otable td:nth-child(3){text-align:right;white-space:nowrap}
+.otable td.warn{color:#a3261e;font-weight:700}
+.invbox .copyall{display:block;width:100%;margin-top:12px;padding:10px;border-radius:12px;border:1px solid var(--brand);background:var(--card);color:var(--brand);font-weight:700}
 .more{display:block;width:100%;padding:14px;border:1px dashed var(--line);border-radius:14px;background:none;color:var(--sub)}
 .empty-state{text-align:center;color:var(--sub);padding:40px 0}
 
@@ -195,8 +226,9 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
     </div>
     <div class="tabs" id="tabs"></div>
     <div class="seg" id="seg"><button data-v="list" class="on">📋 주문</button><button data-v="sum">📊 월별 합계</button></div>
-    <div class="tools" id="toolsRow"><input id="q" type="search" placeholder="검색 (상품, 전화 끝 4자리 등)" autocomplete="off"><button class="iconbtn hidden" id="selBtn" title="골라서 비식별 처리">🔒 비식별</button></div>
+    <div class="tools" id="toolsRow"><input id="q" type="search" placeholder="검색 (상품, 전화 끝 4자리 등)" autocomplete="off"><button class="iconbtn hidden" id="selBtn" title="골라서 비식별 처리">🔒 골라서 비식별</button></div>
     <div class="filters" id="filters"></div>
+    <div class="selbanner hidden" id="selBanner">🔒 비식별할 주문 고르는 중 — 카드를 누르면 선택 / 해제</div>
   </header>
   <main>
     <div class="count" id="count"></div>
@@ -204,11 +236,11 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
   </main>
   <button class="fab hidden" id="addBtn">＋ 새 주문</button>
   <div class="selbar hidden" id="selbar">
-    <div class="selinfo" id="selInfo">0건 선택</div>
+    <div class="selhead"><b id="selInfo">0건 선택됨</b><span>카드를 눌러 고르거나, 아래 버튼으로 한 번에 고르세요</span></div>
+    <div class="quick" id="selQuick"></div>
     <div class="selbtns">
-      <button id="selAll">전체 선택</button>
       <button id="selCancel">취소</button>
-      <button id="selGo" class="danger">비식별 처리</button>
+      <button id="selGo" class="danger" disabled>🔒 비식별 처리</button>
     </div>
   </div>
 </section>
@@ -408,7 +440,7 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
     f.classList.toggle('hidden', sum || opts.length<=1);
     $('selBtn').classList.toggle('hidden', d.user.role!=='admin');
     $('adminBtn').classList.toggle('hidden', d.user.role!=='admin');
-    $('addBtn').classList.toggle('hidden', sum || state.selecting || d.user.role==='viewer');
+    $('addBtn').classList.toggle('hidden', sum || state.selecting || !d.canAdd);
     $('selbar').classList.toggle('hidden', sum || !state.selecting);
     if (sum) { if (state.sum) drawSummary(); } else drawList();
   }
@@ -420,15 +452,22 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
   }
   function drawSummary(){
     var s=state.sum, list=$('list'); list.innerHTML='';
-    $('count').textContent=s.monthName+' 기준 · 시트 전체';
+    $('count').textContent=s.monthName+' 기준 · 시트 전체 · 개인정보 없음';
+    if (s.canBuild){
+      var rb=el('button','linkcopy','📊 정산 시트 갱신 (구글 시트의 월별정산·정산내역)');
+      rb.style.marginBottom='10px';
+      rb.onclick=function(){ rb.disabled=true; call('buildReportsWeb', state.token).then(function(n){ toast('정산 시트를 갱신했어요 ('+n+'개월)'); rb.disabled=false; }).catch(function(e){ rb.disabled=false; handleErr(e); }); };
+      list.appendChild(rb);
+    }
     if (!s.months.length){ list.appendChild(el('div','empty-state','날짜가 들어 있는 주문이 없어요')); return; }
-    // 연도별 합계
     var years={};
     s.months.forEach(function(m){
-      var y=m.month.slice(0,4), Y=years[y]||(years[y]={month:y+'년', count:0, unshipped:0, unsettled:0, sums:s.sumNames.map(function(){return 0;}), unsettledSums:s.sumNames.map(function(){return 0;}), groups:{}});
-      Y.count+=m.count; Y.unshipped+=m.unshipped; Y.unsettled+=m.unsettled;
+      var y=m.month.slice(0,4), Y=years[y]||(years[y]={month:y, count:0, shipped:0, unshipped:0, unsettled:0, sums:s.sumNames.map(function(){return 0;}), unsettledSums:s.sumNames.map(function(){return 0;}), groups:{}, amt:{total:0,settled:0,unsettled:0}, tax:{taxed:0,free:0,unknown:0}, items:{}});
+      Y.count+=m.count; Y.shipped+=m.shipped; Y.unshipped+=m.unshipped; Y.unsettled+=m.unsettled;
       m.sums.forEach(function(v,k){ Y.sums[k]+=v; Y.unsettledSums[k]+=m.unsettledSums[k]; });
       Object.keys(m.groups).forEach(function(g){ Y.groups[g]=(Y.groups[g]||0)+m.groups[g]; });
+      ['total','settled','unsettled'].forEach(function(k){ Y.amt[k]+=m.amt[k]; });
+      ['taxed','free','unknown'].forEach(function(k){ Y.tax[k]+=m.tax[k]; });
     });
     var thisYear=String(new Date().getFullYear());
     if (years[thisYear]) list.appendChild(monthCard(years[thisYear], s, thisYear+'년 합계', true));
@@ -438,18 +477,65 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
     });
     Object.keys(years).sort().reverse().forEach(function(y){ if (y!==thisYear) list.appendChild(monthCard(years[y], s, y+'년 합계', true)); });
   }
+  function vatOf(total, inc){ if (inc){ var sp=Math.round(total/1.1); return {supply:sp, vat:total-sp, total:total}; } var v=Math.round(total*0.1); return {supply:total, vat:v, total:total+v}; }
+  function invoiceText(m, s, title){
+    var v=vatOf(m.tax.taxed, s.vatIncluded), A=s.amtName||'금액', L=[title+' '+A+' 정산 · 계산서용'];
+    if (m.tax.taxed) L.push('과세(세금계산서): 공급가액 '+won(v.supply)+' / 세액 '+won(v.vat)+' / 합계 '+won(v.total));
+    if (m.tax.free) L.push('면세(계산서): '+won(m.tax.free));
+    if (m.tax.unknown) L.push('과세구분 확인 필요: '+won(m.tax.unknown));
+    var it=Object.keys(m.items||{});
+    if (it.length) L.push('품목: '+it.map(function(k){ return k+' '+m.items[k].n+'건 '+won(m.items[k].amt); }).join(', '));
+    L.push('합계 '+won(m.amt.total)+' (정산완료 '+won(m.amt.settled)+' / 미정산 '+won(m.amt.unsettled)+')');
+    return L.join('\n');
+  }
   function monthCard(m, s, title, isYear){
     var c=el('div','card mcard'+(isYear?' year':''));
     var h=el('h3'); h.appendChild(el('span','',title)); h.appendChild(el('span','rn', m.count+'건')); c.appendChild(h);
-    var row=function(label, val, cls){ var r=el('div','mrow'+(cls?' '+cls:'')); r.appendChild(el('span','',label)); r.appendChild(el('b','',val)); c.appendChild(r); };
+    var row=function(label, val, cls, into){ var r=el('div','mrow'+(cls?' '+cls:'')); r.appendChild(el('span','',label)); r.appendChild(el('b','',val)); (into||c).appendChild(r); };
     s.sumNames.forEach(function(n,k){ row(n, won(m.sums[k])); });
-    if (s.hasShip && m.unshipped) row('📦 발송 전', m.unshipped+'건', 'warn');
-    if (s.hasSettle && m.unsettled){
-      row('정산 안 된 주문', m.unsettled+'건', 'warn');
-      s.sumNames.forEach(function(n,k){ if (m.unsettledSums[k]) row('└ 미정산 '+n, won(m.unsettledSums[k]), 'warn'); });
+    if (s.hasShip) row('📦 발송', m.shipped+'건 완료'+(m.unshipped?' · '+m.unshipped+'건 남음':''), m.unshipped?'warn':'');
+    if (s.hasSettle && s.amtName){
+      row('💰 정산완료 '+s.amtName, won(m.amt.settled));
+      if (m.unsettled) row('💰 미정산 '+s.amtName+' ('+m.unsettled+'건)', won(m.amt.unsettled), 'warn');
     }
     var g=Object.keys(m.groups).sort(function(a,b){ return m.groups[b]-m.groups[a]; });
     if (s.groupName && g.length) c.appendChild(el('div','msub', s.groupName+': '+g.map(function(k){ return k+' '+m.groups[k]+'건'; }).join(' · ')));
+    if (!s.amtName) return c;
+
+    // 🧾 계산서 · 정산 내역
+    var key='inv:'+title, open=!!state.revealed[key];
+    var tg=el('button','moretoggle', open?'🧾 계산서·정산 내역 접기 ▴':'🧾 계산서·정산 내역 보기 ▾');
+    tg.onclick=function(){ if(state.revealed[key]) delete state.revealed[key]; else state.revealed[key]=1; drawSummary(); };
+    c.appendChild(tg);
+    if (!open) return c;
+    var box=el('div','invbox');
+    var v=vatOf(m.tax.taxed, s.vatIncluded);
+    if (m.tax.taxed){
+      box.appendChild(el('div','invh','과세 → 세금계산서'));
+      row('공급가액', won(v.supply), '', box); row('세액', won(v.vat), '', box); row('합계', won(v.total), '', box);
+    }
+    if (m.tax.free){ box.appendChild(el('div','invh','면세 → 계산서')); row('금액', won(m.tax.free), '', box); }
+    if (m.tax.unknown){ box.appendChild(el('div','invh warn','과세구분 확인 필요')); row('금액', won(m.tax.unknown), 'warn', box); }
+    var items=Object.keys(m.items||{});
+    if (items.length){
+      box.appendChild(el('div','invh','품목별'));
+      items.sort(function(a,b){ return m.items[b].amt-m.items[a].amt; }).forEach(function(k){ row(k+' · '+m.items[k].n+'건 · '+m.items[k].tax, won(m.items[k].amt), '', box); });
+    }
+    if (m.orders && m.orders.length){
+      box.appendChild(el('div','invh','주문 '+m.orders.length+'건'));
+      var tb=el('table','otable'), hr=el('tr');
+      ['주문일','품목','금액','정산','발송'].forEach(function(x){ hr.appendChild(el('th','',x)); }); tb.appendChild(hr);
+      m.orders.forEach(function(o){
+        var tr=el('tr');
+        [o.d.slice(5), (o.item+' '+o.size).trim(), won(o.amt), o.settled?'✔':'미', o.shipped?'✔':'전'].forEach(function(x,i){ var td=el('td',(i===3&&!o.settled)||(i===4&&!o.shipped)?'warn':'',x); tr.appendChild(td); });
+        tb.appendChild(tr);
+      });
+      box.appendChild(tb);
+    }
+    var cp=el('button','copyall','📋 계산서용 내용 복사'); cp.onclick=function(){ copy(invoiceText(m, s, title)); };
+    box.appendChild(cp);
+    box.appendChild(el('div','hint','과세/면세는 '+(s.groupName||'구분')+' 글자로 나눈 참고값이에요. 홈택스 발행 전에 확인해 주세요. 공급가액·세액은 '+(s.vatIncluded?'부가세 포함 금액':'부가세 별도 금액')+' 기준이에요.'));
+    c.appendChild(box);
     return c;
   }
 
@@ -491,7 +577,7 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
       dd.appendChild(cp);
     } else {
       if (val==='') dd.appendChild(el('span','empty','—')); else dd.appendChild(document.createTextNode(val));
-      if (row.m.indexOf(c.i)>=0){
+      if (row.m.indexOf(c.i)>=0 && state.data.user.role==='admin'){ // 개인정보 확인은 관리자만
         var rb=el('button','reveal','보기');
         rb.onclick=function(ev){
           ev.stopPropagation();
@@ -503,7 +589,7 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
         dd.appendChild(rb);
       }
     }
-    if (canEdit && !c.readonly){ dd.className='edit'; dd.onclick=function(){ editCell(row, c); }; }
+    if (c.editable){ dd.className='edit'; dd.onclick=function(){ editCell(row, c); }; }
     dl.appendChild(dt); dl.appendChild(dd);
   }
 
@@ -557,7 +643,7 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
     card.appendChild(box);
 
     var inv=shipCol('invoice'), cou=shipCol('courier'), dat=shipCol('date');
-    if (!canEdit || !inv || inv.readonly) return [f.name,f.phone,f.addr,f.zip,f.memo];
+    if (!inv || !inv.editable) return [f.name,f.phone,f.addr,f.zip,f.memo];
     var dr=state.drafts[row.r] || (state.drafts[row.r]={ courier:(cou&&row.v[cou.i])||d.couriers[0]||'', invoice:'', date:today() });
     var fm=el('div','shipform');
     fm.appendChild(el('h4','','🚚 보낸 뒤 입력해 주세요'));
@@ -611,11 +697,7 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
     rows.slice(0, state.shown).forEach(function(row){
       var card=el('div','card'+(isDone(row)?' done':'')+(state.picked[row.r]?' sel':''));
       card.setAttribute('data-r', row.r);
-      if (state.selecting){
-        var pk=el('label','pick'), cb=el('input'); cb.type='checkbox'; cb.checked=!!state.picked[row.r];
-        cb.onchange=function(){ if(cb.checked) state.picked[row.r]=1; else delete state.picked[row.r]; card.classList.toggle('sel', cb.checked); selInfo(); };
-        pk.appendChild(cb); pk.appendChild(document.createTextNode(' 비식별 처리할 주문으로 고르기')); card.appendChild(pk);
-      }
+      if (state.selecting){ pickCard(card, row, tc); list.appendChild(card); return; }
       var h=el('h3');
       tc.forEach(function(i, k){ if(row.v[i]!=='') h.appendChild(el('span','', (h.childNodes.length?'· ':'')+row.v[i])); });
       if (!h.childNodes.length) h.appendChild(el('span','','(내용 없음)'));
@@ -631,7 +713,7 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
         } else {
           st.appendChild(el('span','badge todo','📦 발송 전'));
           if (d.url){ var lk=el('button','linkcopy','🔗 이 주문 링크'); lk.onclick=function(){ copy('[주문] '+titleCols().map(function(i){ return row.v[i]; }).filter(Boolean).join(' ')+' 발송 부탁드려요\n'+d.url+'?r='+row.r); }; st.appendChild(lk); }
-          if (canEdit && inv && !inv.readonly && !row.open){
+          if (inv && inv.editable && !row.open){
             var sb=el('button','shipbtn','발송 처리');
             sb.onclick=function(){ shipDialog(row); };
             st.appendChild(sb);
@@ -641,7 +723,7 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
       if (sc){
         var ok=isSettled(row);
         var bb=el('button','badge '+(ok?'ok':'todo2'), ok?'✔ 정산 완료':'정산 전');
-        bb.disabled=!canEdit || sc.readonly;
+        bb.disabled=!sc.editable; // 정산 표시는 관리자만
         bb.onclick=function(){
           var next = sc.check ? !ok : (ok ? '' : d.settleMark);
           var nm=row.v[sc.i];
@@ -658,7 +740,7 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
         cc.forEach(function(c){
           var on=row.v[c.i]===true;
           var b=el('button','chk'+(on?' on':''), (on?'✔ ':'')+c.name);
-          b.disabled=!canEdit || c.readonly;
+          b.disabled=!c.editable;
           b.onclick=function(){
             call('updateCell', state.token, d.sheet, row.r, c.i, on, !on).then(function(v){ row.v[c.i]=v; render(); }).catch(handleErr);
           };
@@ -751,6 +833,7 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
   }
 
   function editCell(row, c){
+    if (!c.editable) return;
     var masked=row.m.indexOf(c.i)>=0, key=row.r+':'+c.i;
     if (masked && state.revealed[key]==null){
       // 가려진 칸은 먼저 진짜 값을 불러와서(기록 남음) 그 값을 고치게 함
@@ -798,10 +881,71 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
   }
 
   /* ---------- 골라서 비식별 처리 (관리자) ---------- */
-  function selInfo(){ $('selInfo').textContent=Object.keys(state.picked).length+'건 선택'; }
+  function isAnon(row){
+    return state.data.cols.some(function(c){ return c.pii && /\(비식별\)|\*{4}-\*{4}/.test(String(row.v[c.i])); });
+  }
+  function parseD(v){ var m=String(v||'').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/); return m?new Date(+m[1],+m[2]-1,+m[3]):null; }
+  function ageDays(row){
+    var dc=shipCol('date'), oc=colWhere(function(c){ return /주문일/.test(c.name); }) || colWhere(function(c){ return c.date && !c.pii; });
+    var d=(dc&&parseD(row.v[dc.i])) || (oc&&parseD(row.v[oc.i]));
+    return d ? Math.floor((Date.now()-d.getTime())/86400000) : null;
+  }
+  function isOld(row){ var a=ageDays(row), lim=state.data.anonDays||90; return a!=null && a>=lim; }
+  function pickCard(card, row, tc){
+    var anon=isAnon(row), on=!!state.picked[row.r];
+    card.className='card pickable'+(on?' sel':'')+(anon?' anon':'');
+    var pr=el('div','pickrow'), tk=el('div','tick', anon?'–':'✔');
+    var txt=el('div',''); txt.appendChild(el('div','picktxt', anon?'이미 비식별됨':(on?'선택됨':'눌러서 선택')));
+    var t=tc.map(function(i){ return row.v[i]; }).filter(Boolean).join(' · ');
+    txt.appendChild(el('div','', t||'(내용 없음)'));
+    pr.appendChild(tk); pr.appendChild(txt); card.appendChild(pr);
+    var f=shipFields(), who=[];
+    if (f.name && row.v[f.name.i]) who.push(row.v[f.name.i]);
+    if (f.phone && row.v[f.phone.i]) who.push(String(row.v[f.phone.i]).replace(/^(\d{3})-?\d{3,4}-?(\d{4})$/,'$1-****-$2'));
+    if (who.length) card.appendChild(el('div','who', who.join(' · ')+'  ('+row.r+'행)'));
+    var tags=el('div','tags');
+    if (hasShip()) tags.appendChild(el('span','tag '+(isShipped(row)?'ok':'no'), isShipped(row)?'발송 완료':'발송 전'));
+    if (settleCol()) tags.appendChild(el('span','tag '+(isSettled(row)?'ok':'no'), isSettled(row)?'정산 완료':'정산 전'));
+    var age=ageDays(row); if (age!=null) tags.appendChild(el('span','tag'+(isOld(row)?' old':''), age+'일 지남'));
+    card.appendChild(tags);
+    card.onclick=function(){
+      if (anon){ toast('이미 비식별 처리된 주문이에요'); return; }
+      if (state.picked[row.r]) delete state.picked[row.r]; else state.picked[row.r]=1;
+      card.innerHTML=''; pickCard(card, row, tc); selInfo();
+    };
+  }
+  function selectable(){ return state.data.rows.filter(function(r){ return !isAnon(r); }); }
+  var QUICK=[
+    ['보이는 주문 전체', function(rows){ return rows.filter(matches); }],
+    ['정산 완료 전부', function(rows){ return rows.filter(function(r){ return isSettled(r); }); }],
+    ['정산 완료 + 기준일 지난 것', function(rows){ return rows.filter(function(r){ return isSettled(r) && isOld(r); }); }],
+    ['발송 완료 전부', function(rows){ return rows.filter(function(r){ return isShipped(r); }); }]
+  ];
+  function drawQuick(){
+    var q=$('selQuick'); q.innerHTML='';
+    QUICK.forEach(function(x, i){
+      if (i===1 && !settleCol()) return; if (i===2 && !settleCol()) return; if (i===3 && !hasShip()) return;
+      var label=i===2 ? '정산 완료 + '+(state.data.anonDays||90)+'일 지난 것' : x[0];
+      var n=x[1](selectable()).length;
+      var b=el('button',''); b.appendChild(document.createTextNode(label)); b.appendChild(el('span','n',n+'건'));
+      b.onclick=function(){ state.picked={}; x[1](selectable()).forEach(function(r){ state.picked[r.r]=1; }); selInfo(); drawList(); toast(label+' '+n+'건 골랐어요'); };
+      q.appendChild(b);
+    });
+    var c=el('button',''); c.textContent='모두 해제'; c.onclick=function(){ state.picked={}; selInfo(); drawList(); }; q.appendChild(c);
+  }
+  function selInfo(){
+    var n=Object.keys(state.picked).length;
+    $('selInfo').textContent=n+'건 선택됨';
+    $('selGo').disabled=!n;
+    $('selGo').textContent=n?'🔒 '+n+'건 비식별 처리':'🔒 비식별 처리';
+  }
   function setSelecting(on){
     state.selecting=on; state.picked={};
     if (on && state.view!=='list'){ $('seg').children[0].click(); }
+    $('selBanner').classList.toggle('hidden', !on);
+    document.body.classList.toggle('selecting', on);
+    $('selBtn').textContent=on?'✕ 고르기 끝':'🔒 골라서 비식별';
+    if (on){ state.shown=Math.max(state.shown, 60); drawQuick(); }
     selInfo(); render();
   }
   function runAnonymize(){
@@ -920,13 +1064,6 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
   $('waitCancel').onclick=function(){ stopWait(); toLogin(''); };
   $('selBtn').onclick=function(){ setSelecting(!state.selecting); };
   $('selCancel').onclick=function(){ setSelecting(false); };
-  $('selAll').onclick=function(){
-    var vis=state.data.rows.filter(matches);
-    var all=vis.every(function(r){ return state.picked[r.r]; });
-    vis.forEach(function(r){ if(all) delete state.picked[r.r]; else state.picked[r.r]=1; });
-    $('selAll').textContent=all?'전체 선택':'전체 해제';
-    selInfo(); drawList();
-  };
   $('selGo').onclick=runAnonymize;
   var qt; $('q').oninput=function(){ clearTimeout(qt); var v=this.value; qt=setTimeout(function(){ state.q=v.trim(); state.shown=20; drawList(); }, 200); };
 
