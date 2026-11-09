@@ -21,6 +21,8 @@
   --gold:#c98a1b;     /* 실장님과 함께 */
   --gold-soft:#f8ead0;
   --rest:#a9b1bf;     /* 쉰 날 */
+  --hq:#7b3fa3;       /* 본부아침예배 */
+  --hq-soft:#f1e8f7;
   --danger:#b4423a;
   --display:"Gowun Batang", "Nanum Myeongjo", "AppleMyungjo", serif;
   --body:"IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
@@ -29,12 +31,12 @@
   --bg:#12161f; --surface:#1a202c; --sunk:#232a38; --line:#2f3848;
   --fg:#e7ebf2; --muted:#a3adbf; --faint:#768096;
   --ink:#8fb0ec; --ink-soft:#26334d; --gold:#e8b04a; --gold-soft:#3a2e17;
-  --rest:#5d6678; --danger:#e07a70; color-scheme:dark}}
+  --rest:#5d6678; --danger:#e07a70; --hq:#c9a0e6; --hq-soft:#33263d; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#12161f; --surface:#1a202c; --sunk:#232a38; --line:#2f3848;
   --fg:#e7ebf2; --muted:#a3adbf; --faint:#768096;
   --ink:#8fb0ec; --ink-soft:#26334d; --gold:#e8b04a; --gold-soft:#3a2e17;
-  --rest:#5d6678; --danger:#e07a70; color-scheme:dark}
+  --rest:#5d6678; --danger:#e07a70; --hq:#c9a0e6; --hq-soft:#33263d; color-scheme:dark}
 
 *{box-sizing:border-box}
 [hidden]{display:none!important}
@@ -159,6 +161,14 @@ textarea{min-height:90px;resize:vertical}
 .dayspick label{border:1px solid var(--line);border-radius:8px;padding:4px 10px;display:inline-flex;gap:4px;align-items:center}
 @media (prefers-reduced-motion:no-preference){.day,.btn{transition:border-color .15s, background-color .15s}}
 .day .i{display:none}
+.day{position:relative}
+.day.hq::after{content:"";position:absolute;top:5px;right:5px;width:8px;height:8px;border-radius:50%;border:2px solid var(--hq);background:var(--surface)}
+.day.hq.hqok::after{background:var(--hq)}
+.sw.h{border-radius:50%;border:2px solid var(--hq);width:10px;height:10px}
+.hqbox{display:grid;gap:6px;background:var(--hq-soft);border:1px solid var(--hq);border-radius:10px;padding:10px 12px}
+.hqbox .t{font-weight:600;color:var(--hq);font-size:.92rem}
+.hqbox .check{min-height:0}
+.hqbox.ok .t::after{content:" · 확인 완료"}
 .memlist{display:grid;gap:8px}
 .mem{display:grid;grid-template-columns:2em minmax(0,1fr) auto auto auto;gap:6px;align-items:center}
 .mem .no{color:var(--muted);font-variant-numeric:tabular-nums;text-align:center;font-weight:600}
@@ -268,6 +278,10 @@ textarea{min-height:90px;resize:vertical}
       <div class="eyebrow" id="leadLabel">오늘의 인도자</div>
       <div class="who" id="leadWho">…</div>
       <div class="meta" id="leadMeta">기록을 불러오는 중이에요.</div>
+      <div class="hqbox" id="hqBox" hidden>
+        <div class="t" id="hqTitle">본부아침예배 날이에요</div>
+        <label class="check"><input type="checkbox" id="hqCheck"> 본부아침예배 안내를 확인했어요</label>
+      </div>
       <div class="rota" id="rota"></div>
       <div class="actions">
         <button class="btn primary" id="recordToday" type="button">오늘 기록하기</button>
@@ -303,6 +317,7 @@ textarea{min-height:90px;resize:vertical}
         <span><i class="sw d"></i>실장님과 함께</span>
         <span><i class="sw r"></i>쉰 날</span>
         <span><i class="sw p"></i>모임일(미기록)</span>
+        <span><i class="sw h"></i>본부아침예배</span>
       </div>
     </div>
     <div class="grid" id="calGrid"></div>
@@ -333,6 +348,7 @@ textarea{min-height:90px;resize:vertical}
     </div>
     <div class="field" id="edLeaderField"><label for="edLeader">인도자</label><select id="edLeader"></select></div>
     <label class="check" id="edDirField"><input type="checkbox" id="edDirector"> 실장님과 함께 예배했어요</label>
+    <label class="check" id="edHqField" hidden><input type="checkbox" id="edHq"> 본부아침예배 안내를 확인했어요</label>
     <div class="field"><label for="edRef">본문</label><input type="text" id="edRef" placeholder="예: 마가복음 10:1-12"></div>
     <div class="field"><label for="edNote">메모</label><textarea id="edNote" placeholder="쉰 이유, 나눔 요약, 기도제목 등"></textarea></div>
     <div class="row">
@@ -359,7 +375,7 @@ const TODAY = iso(new Date());
 
 const state = {
   team: null, teamLoaded: false,
-  sessions: {},
+  sessions: {}, hq: {},
   view: (() => { const d = new Date(); return {y:d.getFullYear(), m:d.getMonth()}; })(),
   db: null, editing: null,
 };
@@ -367,6 +383,19 @@ const state = {
 function members(){ return (state.team?.members || []).filter(Boolean); }
 function meetDays(){ return state.team?.days?.length ? state.team.days : [1,3]; }
 function isMeetDay(s){ return meetDays().includes(parse(s).getDay()); }
+/* 본부아침예배: 상반기(1~6월) 첫째·셋째 월요일, 하반기(7~12월) 둘째·넷째 월요일 */
+function isHQ(s){
+  const d = parse(s);
+  if (d.getDay() !== 1) return false;
+  const nth = Math.ceil(d.getDate() / 7);
+  return d.getMonth() < 6 ? (nth === 1 || nth === 3) : (nth === 2 || nth === 4);
+}
+const hqChecked = s => !!state.hq[s]?.checked;
+async function setHq(date, on){
+  if (hqChecked(date) === on) return true;
+  return write(() => on ? state.db.doc("hq/" + date).set({date, checked: true, checkedAt: new Date().toISOString()})
+                        : state.db.doc("hq/" + date).delete());
+}
 
 /* 다음 인도자: 오늘 이전 마지막 '나눈 날'의 인도자 다음 순서. 쉰 날은 순서를 넘기지 않는다. */
 function lastSharedBefore(dateStr){
@@ -442,6 +471,14 @@ function renderLead(){
     if (rec?.status === "skipped") meta = `오늘은 쉬었어요. 차례는 그대로 ${info.who}님이에요.`;
   }
   $("leadMeta").textContent = meta;
+  const hqDate = info.done ? TODAY : info.date;
+  $("hqBox").hidden = !isHQ(hqDate);
+  if (isHQ(hqDate)){
+    $("hqTitle").textContent = `${hqDate === TODAY ? "오늘은" : pretty(hqDate) + "은"} 본부아침예배 날이에요`;
+    $("hqCheck").checked = hqChecked(hqDate);
+    $("hqCheck").dataset.date = hqDate;
+    $("hqBox").classList.toggle("ok", hqChecked(hqDate));
+  }
   $("rota").innerHTML = ms.map(m => `<span class="${m===info.who?'on':''}">${esc(m)}</span>`).join("");
   $("recordToday").textContent = state.sessions[TODAY] ? "오늘 기록 고치기" : "오늘 기록하기";
 }
@@ -483,7 +520,8 @@ function renderCal(){
     else if (rec?.status === "skipped"){ cls += " skipped"; label = "쉼"; }
     else if (isMeetDay(s)) cls += " sched";
     if (s === TODAY) cls += " today";
-    const aria = `${pretty(s)}${rec ? (rec.status==="shared" ? ` 나눔 ${rec.leader||""}${rec.director?" 실장님과 함께":""}` : " 쉼") : ""}`;
+    if (isHQ(s)) cls += hqChecked(s) ? " hq hqok" : " hq";
+    const aria = `${pretty(s)}${isHQ(s) ? " 본부아침예배" + (hqChecked(s) ? " 확인함" : "") : ""}${rec ? (rec.status==="shared" ? ` 나눔 ${rec.leader||""}${rec.director?" 실장님과 함께":""}` : " 쉼") : ""}`;
     html += `<button type="button" class="${cls}" data-date="${s}" aria-label="${esc(aria)}"><span class="d">${d}</span><span class="l">${esc(label)}</span><span class="i">${esc(rec?.status === "shared" && label.length > 2 ? label.slice(-2) : label)}</span></button>`;
   }
   $("calGrid").innerHTML = html;
@@ -507,13 +545,15 @@ function openEditor(date){
   state.editing = date;
   const rec = state.sessions[date];
   const d = parse(date);
-  $("edDow").textContent = isMeetDay(date) ? "모임일" : "모임일 아님";
+  $("edDow").textContent = (isMeetDay(date) ? "모임일" : "모임일 아님") + (isHQ(date) ? " · 본부아침예배" : "");
   $("edTitle").textContent = `${d.getFullYear()}년 ${pretty(date)}`;
   const suggested = (() => { const last = lastSharedBefore(date); return last ? nextAfter(last.leader) : members()[0]; })();
   $("edLeader").innerHTML = members().map(m => `<option>${esc(m)}</option>`).join("");
   $("edLeader").value = rec?.leader || suggested;
   setStatus(rec?.status || "shared");
   $("edDirector").checked = !!rec?.director;
+  $("edHqField").hidden = !isHQ(date);
+  $("edHq").checked = hqChecked(date);
   $("edRef").value = rec?.ref || "";
   $("edNote").value = rec?.note || "";
   $("edDelete").hidden = !rec;
@@ -548,6 +588,7 @@ $("editForm").addEventListener("submit", async e => {
   const rec = {date, status, ref: $("edRef").value.trim(), note: $("edNote").value.trim(), updatedAt: new Date().toISOString()};
   if (status === "shared"){ rec.leader = $("edLeader").value; rec.director = $("edDirector").checked; }
   else { rec.leader = ""; rec.director = false; }
+  if (isHQ(date) && !(await setHq(date, $("edHq").checked))) return;
   if (await write(() => state.db.doc("sessions/" + date).set(rec), "저장했어요")) closeEditor();
 });
 $("edDelete").addEventListener("click", async () => {
@@ -561,6 +602,11 @@ $("calGrid").addEventListener("click", e => { const b = e.target.closest("button
 $("prevM").addEventListener("click", () => { const v = state.view; v.m--; if (v.m < 0){ v.m = 11; v.y--; } renderCal(); });
 $("nextM").addEventListener("click", () => { const v = state.view; v.m++; if (v.m > 11){ v.m = 0; v.y++; } renderCal(); });
 $("recordToday").addEventListener("click", () => openEditor(TODAY));
+$("hqCheck").addEventListener("change", async e => {
+  const on = e.target.checked;
+  if (await setHq(e.target.dataset.date, on)) toast(on ? "본부아침예배 확인을 남겼어요" : "확인을 취소했어요");
+  else e.target.checked = !on;
+});
 
 /* 팀즈 안내문 */
 function noticeText(){
@@ -569,6 +615,7 @@ function noticeText(){
     `[아침묵상 안내] ${pretty(info.date)}`,
     `인도·기도: ${info.done ? info.who : (info.who || "-")}`,
     `본문: ${state.sessions[info.date]?.ref || "매일성경 오늘 본문"}`,
+    ...(isHQ(info.done ? TODAY : info.date) ? ["※ 본부아침예배 날이에요. 시간과 장소를 확인해 주세요."] : []),
     `말씀 보기: ${SITE}`,
   ].join("\n");
 }
@@ -690,6 +737,9 @@ async function openRoom(room){
   }, fail);
   state.db.collection("sessions").onSnapshot(q => {
     const o = {}; q.docs.forEach(d => o[d.id] = d.data()); state.sessions = o; renderAll();
+  }, fail);
+  state.db.collection("hq").onSnapshot(q => {
+    const o = {}; q.docs.forEach(d => o[d.id] = d.data()); state.hq = o; renderAll();
   }, fail);
 }
 

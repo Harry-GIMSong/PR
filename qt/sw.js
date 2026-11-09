@@ -1,6 +1,6 @@
 // 아침묵상 나눔 기록 오프라인 실행용 서비스 워커
 // 앱 파일은 새 버전을 먼저 받고(인터넷이 없으면 저장해 둔 것), 버전이 고정된 라이브러리는 저장해 둔 것을 씁니다.
-const CACHE = "qt-v1";
+const CACHE = "qt-v2";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest", "./firebase-config.js", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png"];
 
 self.addEventListener("install", e => {
