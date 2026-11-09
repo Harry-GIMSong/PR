@@ -29,6 +29,10 @@ const CONFIG = {
   // 이름 열로 잘못 인식되지 않게 할 단어 (예: "상품이름")
   NAME_EXCLUDE: ['상품', '품목', '제품', '옵션', '택배', '택배사'],
 
+  // 개인정보 열(위 PII_KEYWORDS)과 함께 암호화해서 저장할 열.
+  // 암호화는 시트 메뉴 "🔒 개인정보 암호화 켜기" 로 켭니다.
+  ENC_EXTRA_KEYWORDS: ['배송메모'],
+
   // 이 단어가 머리글에 있으면 웹앱에서 고치지 못하게 함
   READONLY_KEYWORDS: ['순번', '주문번호'],
 
@@ -529,6 +533,7 @@ function columns_(sh) {
       ship: has_(h, CONFIG.SHIP.invoice) ? 'invoice' : has_(h, CONFIG.SHIP.courier) ? 'courier' : has_(h, CONFIG.SHIP.date) ? 'date' : '',
       settle: has_(h, CONFIG.SETTLE_KEYWORDS),
       serial: has_(h, CONFIG.SERIAL_KEYWORDS),
+      enc: !!piiType_(h) || has_(h, CONFIG.ENC_EXTRA_KEYWORDS),
     };
   });
 }
@@ -539,6 +544,7 @@ function mask_(value, type) {
   const v = String(value);
   if (!v) return v;
   if (type && v.indexOf('*') >= 0) return v; // 이미 가려진(파기된) 값
+  if (/^\((손상된 암호문|열쇠 없음)\)$/.test(v)) return v; // 복호화 실패 안내는 그대로
   if (type === 'phone') {
     const d = v.replace(/\D/g, '');
     if (d.length >= 8) return d.slice(0, 3) + '-****-' + d.slice(-4);
@@ -582,7 +588,7 @@ function getData(token, sheetName) {
         const col = cols[c];
         if (hide[c]) { v.push(''); continue; }
         if (col.check) { v.push(raw[r][c] === true); continue; }
-        const d = disp[r][c];
+        const d = col.enc ? decrypt_(disp[r][c]) : disp[r][c];
         const masked = CONFIG.MASK_PII ? mask_(d, col.pii) : d;
         if (masked !== d) m.push(c);
         v.push(masked);
@@ -613,10 +619,315 @@ function reveal(token, sheetName, row, colIdx) {
   if (!(row > CONFIG.HEADER_ROW && row <= sh.getLastRow()) || !(colIdx >= 0 && colIdx < sh.getLastColumn())) throw new Error('잘못된 위치예요.');
   const header = sh.getRange(CONFIG.HEADER_ROW, colIdx + 1).getDisplayValue();
   if (user.role !== 'admin' && CONFIG.ADMIN_ONLY_KEYWORDS.length && has_(header, CONFIG.ADMIN_ONLY_KEYWORDS)) throw new Error('볼 수 없는 칸이에요.');
-  const value = sh.getRange(row, colIdx + 1).getDisplayValue();
+  const value = decrypt_(sh.getRange(row, colIdx + 1).getDisplayValue());
   log_(user.name, '개인정보 보기', sheetName + ' ' + row + '행 [' + header + ']');
   if (user.role !== 'admin') notify_('reveal', user.name + ' 님이 개인정보를 봤어요: ' + sheetName + ' ' + row + '행 [' + header + ']');
   return value;
+}
+
+/* ------------------------------------------------------------------ */
+/* 개인정보 암호화 저장 (AES-256-CTR + HMAC-SHA256, encrypt-then-MAC)   */
+/*  시트에는 "ENC1:…" 암호문만 저장되고, 웹앱·관리자 메뉴에서만 풀림.     */
+/*  열쇠는 스크립트 속성(시트 주인만 접근)에만 있고 시트를 복사해도 안 따라감. */
+/* ------------------------------------------------------------------ */
+
+const ENC_PREFIX = 'ENC1:';
+
+function u8_(signed) { return Uint8Array.from(signed, b => b & 255); }
+function s8_(u8) { return Array.from(u8, b => (b > 127 ? b - 256 : b)); }
+
+function utf8Enc_(str) {
+  const out = [];
+  for (const ch of String(str)) {
+    const c = ch.codePointAt(0);
+    if (c < 0x80) out.push(c);
+    else if (c < 0x800) out.push(0xc0 | (c >> 6), 0x80 | (c & 63));
+    else if (c < 0x10000) out.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
+    else out.push(0xf0 | (c >> 18), 0x80 | ((c >> 12) & 63), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
+  }
+  return Uint8Array.from(out);
+}
+function utf8Dec_(b) {
+  let s = '', i = 0;
+  while (i < b.length) {
+    const c = b[i++];
+    let cp;
+    if (c < 0x80) cp = c;
+    else if (c < 0xe0) cp = ((c & 31) << 6) | (b[i++] & 63);
+    else if (c < 0xf0) cp = ((c & 15) << 12) | ((b[i++] & 63) << 6) | (b[i++] & 63);
+    else cp = ((c & 7) << 18) | ((b[i++] & 63) << 12) | ((b[i++] & 63) << 6) | (b[i++] & 63);
+    s += String.fromCodePoint(cp);
+  }
+  return s;
+}
+
+/** AES-256 블록 암호 (암호화 방향만: CTR 모드는 암호화·복호화 모두 이것만 씀) */
+const AES_ = (function () {
+  const S = new Uint8Array(256);
+  const rotl = (x, n) => ((x << n) | (x >> (8 - n))) & 255;
+  let p = 1, q = 1;
+  do {
+    p = (p ^ ((p << 1) & 255) ^ (p & 0x80 ? 0x1b : 0)) & 255;
+    q ^= q << 1; q ^= q << 2; q ^= q << 4; q &= 255;
+    if (q & 0x80) q ^= 0x09;
+    S[p] = (q ^ rotl(q, 1) ^ rotl(q, 2) ^ rotl(q, 3) ^ rotl(q, 4) ^ 0x63) & 255;
+  } while (p !== 1);
+  S[0] = 0x63;
+  const xt = a => ((a << 1) ^ (a & 0x80 ? 0x1b : 0)) & 255;
+
+  function expand(key) { // 32바이트 열쇠 → 15개 라운드 키(240바이트)
+    const w = new Uint8Array(240);
+    w.set(key);
+    let rcon = 1;
+    for (let i = 32; i < 240; i += 4) {
+      let t0 = w[i - 4], t1 = w[i - 3], t2 = w[i - 2], t3 = w[i - 1];
+      if (i % 32 === 0) {
+        const tmp = t0;
+        t0 = S[t1] ^ rcon; t1 = S[t2]; t2 = S[t3]; t3 = S[tmp];
+        rcon = xt(rcon);
+      } else if (i % 32 === 16) {
+        t0 = S[t0]; t1 = S[t1]; t2 = S[t2]; t3 = S[t3];
+      }
+      w[i] = w[i - 32] ^ t0; w[i + 1] = w[i - 31] ^ t1; w[i + 2] = w[i - 30] ^ t2; w[i + 3] = w[i - 29] ^ t3;
+    }
+    return w;
+  }
+
+  function encryptBlock(w, input) {
+    const s = new Uint8Array(16);
+    for (let i = 0; i < 16; i++) s[i] = input[i] ^ w[i];
+    const t = new Uint8Array(16);
+    for (let round = 1; round <= 14; round++) {
+      // SubBytes + ShiftRows
+      for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) t[c * 4 + r] = S[s[((c + r) % 4) * 4 + r]];
+      if (round < 14) { // MixColumns
+        for (let c = 0; c < 4; c++) {
+          const a0 = t[c * 4], a1 = t[c * 4 + 1], a2 = t[c * 4 + 2], a3 = t[c * 4 + 3];
+          const all = a0 ^ a1 ^ a2 ^ a3;
+          s[c * 4] = a0 ^ all ^ xt(a0 ^ a1);
+          s[c * 4 + 1] = a1 ^ all ^ xt(a1 ^ a2);
+          s[c * 4 + 2] = a2 ^ all ^ xt(a2 ^ a3);
+          s[c * 4 + 3] = a3 ^ all ^ xt(a3 ^ a0);
+        }
+      } else s.set(t);
+      for (let i = 0; i < 16; i++) s[i] ^= w[round * 16 + i];
+    }
+    return s;
+  }
+
+  function ctr(w, iv, data) {
+    const out = new Uint8Array(data.length);
+    const counter = Uint8Array.from(iv);
+    for (let off = 0; off < data.length; off += 16) {
+      const ks = encryptBlock(w, counter);
+      for (let i = 0; i < 16 && off + i < data.length; i++) out[off + i] = data[off + i] ^ ks[i];
+      for (let i = 15; i >= 0; i--) { counter[i] = (counter[i] + 1) & 255; if (counter[i]) break; }
+    }
+    return out;
+  }
+  return { expand: expand, encryptBlock: encryptBlock, ctr: ctr };
+})();
+
+let ENC_KEYS_ = null;
+/** 마스터 열쇠(32바이트)를 스크립트 속성에서 꺼냄. 없으면 create=true 일 때만 새로 만듦 */
+function encKeys_(create) {
+  if (ENC_KEYS_) return ENC_KEYS_;
+  let k = props().getProperty('ENC_KEY');
+  if (!k) {
+    if (!create) return null;
+    const seed = Utilities.getUuid() + Utilities.getUuid() + Utilities.getUuid() + Date.now() + Math.random();
+    k = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, seed));
+    props().setProperty('ENC_KEY', k);
+  }
+  const master = Utilities.base64Decode(k);
+  const sub = label => u8_(Utilities.computeHmacSha256Signature(s8_(utf8Enc_(label)), master));
+  ENC_KEYS_ = { aes: AES_.expand(sub('aes-256-ctr')), mac: s8_(sub('hmac-sha256')) };
+  return ENC_KEYS_;
+}
+function encOn_() { return props().getProperty('ENC_ON') === '1'; }
+
+function randomIv_() {
+  const seed = Utilities.getUuid() + Utilities.getUuid() + Date.now() + Math.random();
+  return u8_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, seed)).slice(0, 16);
+}
+function macOf_(keys, iv, ct) {
+  const msg = new Uint8Array(ENC_PREFIX.length + iv.length + ct.length);
+  msg.set(utf8Enc_(ENC_PREFIX)); msg.set(iv, ENC_PREFIX.length); msg.set(ct, ENC_PREFIX.length + iv.length);
+  return u8_(Utilities.computeHmacSha256Signature(s8_(msg), keys.mac)).slice(0, 16);
+}
+
+function isEnc_(v) { return typeof v === 'string' && v.indexOf(ENC_PREFIX) === 0; }
+
+/** 글자 → "ENC1:…" (빈칸·이미 암호문·비식별 처리된 값은 그대로) */
+function encrypt_(plain) {
+  const v = String(plain == null ? '' : plain);
+  if (!v || isEnc_(v) || /\(비식별\)|\*/.test(v)) return v;
+  const keys = encKeys_(true);
+  const iv = randomIv_();
+  const ct = AES_.ctr(keys.aes, iv, utf8Enc_(v));
+  const tag = macOf_(keys, iv, ct);
+  const all = new Uint8Array(32 + ct.length);
+  all.set(iv); all.set(ct, 16); all.set(tag, 16 + ct.length);
+  return ENC_PREFIX + Utilities.base64EncodeWebSafe(s8_(all)).replace(/=+$/, '');
+}
+
+/** "ENC1:…" → 원래 글자. 암호문이 아니면 그대로. 위조·손상이면 표시용 문구 */
+function decrypt_(v) {
+  if (!isEnc_(v)) return v;
+  const keys = encKeys_(false);
+  if (!keys) return '(열쇠 없음)';
+  try {
+    let b64 = v.slice(ENC_PREFIX.length);
+    while (b64.length % 4) b64 += '=';
+    const all = u8_(Utilities.base64DecodeWebSafe(b64));
+    if (all.length < 33) return '(손상된 암호문)';
+    const iv = all.slice(0, 16), ct = all.slice(16, all.length - 16), tag = all.slice(all.length - 16);
+    const want = macOf_(keys, iv, ct);
+    let diff = 0;
+    for (let i = 0; i < 16; i++) diff |= want[i] ^ tag[i];
+    if (diff) return '(손상된 암호문)';
+    return utf8Dec_(AES_.ctr(keys.aes, iv, ct));
+  } catch (e) {
+    return '(손상된 암호문)';
+  }
+}
+
+/** 전화번호가 숫자로 바뀌며 앞자리 0 이 빠진 경우 되살림 (예: 1012345678 → 01012345678) */
+function fixPhone_(v, col) {
+  if (col && col.pii === 'phone' && /^1\d{8,9}$/.test(String(v))) return '0' + v;
+  return v;
+}
+
+/** r0~r1 행의 암호화 대상 칸 중 아직 평문인 것을 암호화. 바꾼 칸 수 */
+function encryptRange_(sh, col, r0, r1) {
+  const rng = sh.getRange(r0, col.i + 1, r1 - r0 + 1, 1);
+  const disp = rng.getDisplayValues(), forms = rng.getFormulas();
+  const hit = [];
+  const out = disp.map((r, i) => {
+    const v = String(r[0]);
+    if (forms[i][0] || !v.trim() || isEnc_(v)) return [v];
+    const e = encrypt_(fixPhone_(v.trim(), col));
+    if (e !== v) hit.push(i);
+    return [e];
+  });
+  if (!hit.length) return 0;
+  if (forms.some(f => f[0]) || hit.length <= 3) {
+    hit.forEach(i => sh.getRange(r0 + i, col.i + 1).setNumberFormat('@').setValue(out[i][0]));
+  } else {
+    rng.setNumberFormat('@'); // 암호문이 숫자·날짜로 바뀌지 않게
+    rng.setValues(out);
+  }
+  return hit.length;
+}
+
+/** 모든 시트의 암호화 대상 열 전체를 (평문만) 암호화. 매시간 자동 점검에도 씀 */
+function encryptPending() {
+  if (!encOn_()) return 0;
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    let n = 0;
+    allowedSheets_().forEach(name => {
+      const sh = ss_().getSheetByName(name);
+      const last = sh.getLastRow();
+      if (last <= CONFIG.HEADER_ROW) return;
+      columns_(sh).filter(c => c.enc).forEach(c => { n += encryptRange_(sh, c, CONFIG.HEADER_ROW + 1, last); });
+    });
+    if (n) log_('자동', '개인정보 암호화', n + '칸');
+    return n;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function menuEncryptOn() {
+  const ui = SpreadsheetApp.getUi();
+  const first = !props().getProperty('ENC_KEY');
+  const ok = ui.alert('🔒 개인정보 암호화 켜기',
+    '성명·연락처·주소·우편번호·배송메모 열을 AES-256 으로 암호화해서 "ENC1:…" 로 저장합니다.\n\n' +
+    ' · 시트에서는 이 열들이 암호문으로 보이고, 웹앱(PIN)과 이 메뉴의 "선택한 행 개인정보 보기" 에서만 풀려요.\n' +
+    ' · 앞으로 시트에 붙여 넣는 값도 바로 암호화되고, 매시간 한 번 더 점검해요.\n' +
+    ' · 열쇠는 이 스크립트에만 있어요. 시트를 복사·내려받아도 개인정보는 못 읽어요.\n' +
+    (first ? '\n⚠️ 열쇠를 새로 만듭니다. 켠 뒤 "암호화 열쇠 백업" 으로 열쇠를 꼭 따로 보관하세요.\n' : '') +
+    '\n지금 켜고 전체를 암호화할까요?', ui.ButtonSet.YES_NO);
+  if (ok !== ui.Button.YES) return;
+  encKeys_(true);
+  props().setProperty('ENC_ON', '1');
+  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'encryptPending').forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('encryptPending').timeBased().everyHours(1).create();
+  const n = encryptPending();
+  log_('시트 주인', '암호화 켜기', n + '칸 암호화');
+  ui.alert(n + '칸을 암호화했어요.' + (first ? '\n\n이제 메뉴 "암호화 열쇠 백업" 으로 열쇠를 비밀번호 관리 앱 등에 보관해 주세요.' : ''));
+}
+
+function menuEncryptOff() {
+  const ui = SpreadsheetApp.getUi();
+  const ok = ui.alert('암호화 끄기', '암호화를 끄고, 시트의 암호문을 모두 원래 글자로 되돌립니다. 계속할까요?', ui.ButtonSet.YES_NO);
+  if (ok !== ui.Button.YES) return;
+  props().setProperty('ENC_ON', '0');
+  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'encryptPending').forEach(t => ScriptApp.deleteTrigger(t));
+  let n = 0;
+  allowedSheets_().forEach(name => {
+    const sh = ss_().getSheetByName(name);
+    const last = sh.getLastRow();
+    if (last <= CONFIG.HEADER_ROW) return;
+    columns_(sh).filter(c => c.enc).forEach(c => {
+      const rng = sh.getRange(CONFIG.HEADER_ROW + 1, c.i + 1, last - CONFIG.HEADER_ROW, 1);
+      const vals = rng.getDisplayValues();
+      let ch = false;
+      const out = vals.map(r => { if (isEnc_(r[0])) { ch = true; n++; return [decrypt_(r[0])]; } return [r[0]]; });
+      if (ch) { rng.setNumberFormat('@'); rng.setValues(out); }
+    });
+  });
+  log_('시트 주인', '암호화 끄기', n + '칸 복호화');
+  ui.alert(n + '칸을 원래 글자로 되돌렸어요. (열쇠는 지우지 않았어요)');
+}
+
+/** 시트에서 고른 행의 개인정보를 풀어서 보여 줌 (시트 주인만, 기록 남음) */
+function menuShowSelected() {
+  const ui = SpreadsheetApp.getUi();
+  const sh = ss_().getActiveSheet();
+  if (allowedSheets_().indexOf(sh.getName()) < 0) { ui.alert('주문 시트에서 행을 골라 주세요.'); return; }
+  const sel = sh.getActiveRange();
+  const r0 = Math.max(sel.getRow(), CONFIG.HEADER_ROW + 1), r1 = Math.min(sel.getLastRow(), r0 + 29);
+  if (r1 < r0) { ui.alert('볼 행(머리글 아래)을 골라 주세요.'); return; }
+  const cols = columns_(sh);
+  const vals = sh.getRange(r0, 1, r1 - r0 + 1, cols.length).getDisplayValues();
+  const esc = x => String(x).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  const title = cols.filter(c => c.title || has_(c.name, ['주문번호']));
+  let html = '<style>body{font-family:sans-serif;font-size:14px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:6px;text-align:left;vertical-align:top}th{background:#f3f5f2;white-space:nowrap}</style><table><tr><th>행</th>' +
+    title.map(c => '<th>' + esc(c.name) + '</th>').join('') + cols.filter(c => c.enc).map(c => '<th>' + esc(c.name) + '</th>').join('') + '</tr>';
+  vals.forEach((r, i) => {
+    html += '<tr><td>' + (r0 + i) + '</td>' + title.map(c => '<td>' + esc(r[c.i]) + '</td>').join('') +
+      cols.filter(c => c.enc).map(c => '<td>' + esc(decrypt_(r[c.i])) + '</td>').join('') + '</tr>';
+  });
+  html += '</table>';
+  log_('시트 주인', '개인정보 보기(시트)', sh.getName() + ' ' + r0 + '~' + r1 + '행');
+  ui.showModalDialog(HtmlService.createHtmlOutput(html).setWidth(900).setHeight(500), '개인정보 보기 (' + r0 + '~' + r1 + '행)');
+}
+
+function menuKeyBackup() {
+  const ui = SpreadsheetApp.getUi();
+  const k = props().getProperty('ENC_KEY');
+  if (!k) { ui.alert('아직 열쇠가 없어요. "개인정보 암호화 켜기" 를 먼저 하세요.'); return; }
+  const ok = ui.alert('암호화 열쇠 백업', '열쇠를 화면에 보여 줍니다. 이 열쇠가 있으면 누구든 암호문을 풀 수 있어요.\n주변에 사람이 없는지 확인하고, 비밀번호 관리 앱이나 종이에만 적어 두세요(카톡·메일·사진 금지).\n\n보여 줄까요?', ui.ButtonSet.YES_NO);
+  if (ok !== ui.Button.YES) return;
+  log_('시트 주인', '암호화 열쇠 백업 보기', '');
+  ui.alert('암호화 열쇠', k + '\n\n(스크립트를 지우거나 새로 만들었을 때 "암호화 열쇠 복원" 에 넣으면 됩니다)', ui.ButtonSet.OK);
+}
+
+function menuKeyRestore() {
+  const ui = SpreadsheetApp.getUi();
+  const r = ui.prompt('암호화 열쇠 복원', '백업해 둔 열쇠를 붙여 넣으세요.\n지금 열쇠와 다르면 지금 열쇠로 만든 암호문은 못 풀게 됩니다.', ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  const k = r.getResponseText().trim();
+  let bytes;
+  try { bytes = Utilities.base64Decode(k); } catch (e) { bytes = []; }
+  if (bytes.length !== 32) { ui.alert('열쇠 모양이 아니에요 (base64, 32바이트).'); return; }
+  props().setProperty('ENC_KEY', k);
+  ENC_KEYS_ = null;
+  log_('시트 주인', '암호화 열쇠 복원', '');
+  ui.alert('열쇠를 복원했어요.');
 }
 
 /* ------------------------------------------------------------------ */
@@ -680,10 +991,11 @@ function onEdit(e) {
     const r1 = rng.getLastRow();
     if (r1 < r0 || r1 - r0 > 2000) return;
     const cols = columns_(sh);
+    const on = encOn_();
     for (let c = rng.getColumn(); c <= rng.getLastColumn(); c++) {
       const col = cols[c - 1];
-      if (!isDateCol_(col)) continue;
-      normalizeDateRange_(sh, col, r0, r1);
+      if (isDateCol_(col)) normalizeDateRange_(sh, col, r0, r1);
+      else if (on && col && col.enc) encryptRange_(sh, col, r0, r1);
     }
   } catch (err) { /* 입력을 막지 않도록 무시 */ }
 }
@@ -762,7 +1074,7 @@ function updateCell(token, sheetName, row, colIdx, oldValue, newValue) {
       log_(user.name, '체크 변경', sheetName + ' ' + row + '행 [' + col.name + '] → ' + (newValue === true ? '✔' : '해제'));
       return newValue === true;
     }
-    const curDisp = cell.getDisplayValue();
+    const curDisp = col.enc ? decrypt_(cell.getDisplayValue()) : cell.getDisplayValue();
     const curShown = CONFIG.MASK_PII ? mask_(curDisp, col.pii) : curDisp;
     if (curShown !== String(oldValue)) throw new Error('CONFLICT: 그사이 다른 분이 바꿨어요. 새로 불러올게요.');
     if (isDateCol_(col) && String(newValue).trim()) {
@@ -770,12 +1082,14 @@ function updateCell(token, sheetName, row, colIdx, oldValue, newValue) {
       if (!d) throw new Error('날짜를 알아볼 수 없어요. 11/5 또는 2026-11-05 처럼 넣어 주세요.');
       cell.setNumberFormat(dateFormatFor_(sh, col.i));
       cell.setValue(d);
+    } else if (col.enc && encOn_() && String(newValue).trim()) {
+      cell.setValue(encrypt_(String(newValue).trim().slice(0, 2000)));
     } else {
       cell.setValue(cleanInput_(newValue));
     }
     SpreadsheetApp.flush();
     log_(user.name, '수정', sheetName + ' ' + row + '행 [' + col.name + ']' + (col.pii ? '' : ' "' + String(curDisp).slice(0, 40) + '" → "' + String(newValue).slice(0, 40) + '"'));
-    const d = cell.getDisplayValue();
+    const d = col.enc ? decrypt_(cell.getDisplayValue()) : cell.getDisplayValue();
     return CONFIG.MASK_PII ? mask_(d, col.pii) : d;
   } finally {
     lock.releaseLock();
@@ -810,6 +1124,7 @@ function addRow(token, sheetName, values) {
         if (!d) throw new Error('[' + c.name + '] 날짜를 알아볼 수 없어요. 11/5 처럼 넣어 주세요.');
         return d;
       }
+      if (c.enc && encOn_() && String(v || '').trim()) return encrypt_(String(v).trim().slice(0, 2000));
       return cleanInput_(v);
     });
     cols.forEach(c => { if (isDateCol_(c) && out[c.i] instanceof Date) sh.getRange(row, c.i + 1).setNumberFormat(dateFormatFor_(sh, c.i)); });
@@ -962,6 +1277,12 @@ function onOpen() {
     .addItem('로그인 잠금 풀기', 'menuUnlock')
     .addItem('웹앱 주소 바꾸기 (주소가 샜을 때)', 'menuRotateUrl')
     .addItem('날짜 칸 형식 한 번에 정리', 'menuNormalizeDates')
+    .addSeparator()
+    .addItem('🔒 개인정보 암호화 켜기 (지금 전체 암호화)', 'menuEncryptOn')
+    .addItem('선택한 행 개인정보 보기', 'menuShowSelected')
+    .addItem('암호화 열쇠 백업', 'menuKeyBackup')
+    .addItem('암호화 열쇠 복원', 'menuKeyRestore')
+    .addItem('암호화 끄기 (원래 글자로 되돌리기)', 'menuEncryptOff')
     .addSeparator()
     .addItem('비식별: 정산 O + ' + CONFIG.ANON_AFTER_DAYS + '일 지난 주문 (지금)', 'menuAnonymizeNow')
     .addItem('비식별: 정산 O 주문 전체 (기간 무시)', 'menuAnonymizeSettledAll')
@@ -1168,6 +1489,7 @@ function anonymizeOld(dryRun, mode, pick, who) {
       const rng = sh.getRange(first, 1, n, cols.length);
       const raw = rng.getValues();
       const disp = rng.getDisplayValues();
+      disp.forEach(row => cols.forEach(c => { if (c.enc) row[c.i] = decrypt_(row[c.i]); })); // 암호문은 풀어서 판단
       const forms = rng.getFormulas();
       const targets = [];
       for (let r = 0; r < n; r++) {
