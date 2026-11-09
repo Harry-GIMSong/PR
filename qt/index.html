@@ -164,11 +164,14 @@ textarea{min-height:90px;resize:vertical}
 .day{position:relative}
 .day.hq::after{content:"";position:absolute;top:5px;right:5px;width:8px;height:8px;border-radius:50%;border:2px solid var(--hq);background:var(--surface)}
 .day.hq.hqok::after{background:var(--hq)}
+.day.hqday{background:var(--hq);color:var(--bg);border-color:var(--hq)}
+.day.hqday::after{display:none}
+.sw.hf{background:var(--hq)}
 .sw.h{border-radius:50%;border:2px solid var(--hq);width:10px;height:10px}
 .hqbox{display:grid;gap:6px;background:var(--hq-soft);border:1px solid var(--hq);border-radius:10px;padding:10px 12px}
 .hqbox .t{font-weight:600;color:var(--hq);font-size:.92rem}
 .hqbox .check{min-height:0}
-.hqbox.ok .t::after{content:" · 확인 완료"}
+.hqbox.ok .t::after{content:" · 기록됨"}
 .memlist{display:grid;gap:8px}
 .mem{display:grid;grid-template-columns:2em minmax(0,1fr) auto auto auto;gap:6px;align-items:center}
 .mem .no{color:var(--muted);font-variant-numeric:tabular-nums;text-align:center;font-weight:600}
@@ -280,7 +283,7 @@ textarea{min-height:90px;resize:vertical}
       <div class="meta" id="leadMeta">기록을 불러오는 중이에요.</div>
       <div class="hqbox" id="hqBox" hidden>
         <div class="t" id="hqTitle">본부아침예배 날이에요</div>
-        <label class="check"><input type="checkbox" id="hqCheck"> 본부아침예배 안내를 확인했어요</label>
+        <label class="check"><input type="checkbox" id="hqCheck"> 본부아침예배 드렸어요 (본부아침예배로 기록)</label>
       </div>
       <div class="rota" id="rota"></div>
       <div class="actions">
@@ -317,7 +320,8 @@ textarea{min-height:90px;resize:vertical}
         <span><i class="sw d"></i>실장님과 함께</span>
         <span><i class="sw r"></i>쉰 날</span>
         <span><i class="sw p"></i>모임일(미기록)</span>
-        <span><i class="sw h"></i>본부아침예배</span>
+        <span><i class="sw hf"></i>본부아침예배</span>
+        <span><i class="sw h"></i>본부아침예배 날(미기록)</span>
       </div>
     </div>
     <div class="grid" id="calGrid"></div>
@@ -343,12 +347,12 @@ textarea{min-height:90px;resize:vertical}
     <div class="field"><span class="lab">이날은</span>
       <div class="seg" id="edStatus">
         <button type="button" data-v="shared" aria-pressed="true">나눴어요</button>
+        <button type="button" data-v="hq" aria-pressed="false" id="edHqBtn" hidden>본부아침예배</button>
         <button type="button" data-v="skipped" aria-pressed="false">쉬었어요</button>
       </div>
     </div>
     <div class="field" id="edLeaderField"><label for="edLeader">인도자</label><select id="edLeader"></select></div>
     <label class="check" id="edDirField"><input type="checkbox" id="edDirector"> 실장님과 함께 예배했어요</label>
-    <label class="check" id="edHqField" hidden><input type="checkbox" id="edHq"> 본부아침예배 안내를 확인했어요</label>
     <div class="field"><label for="edRef">본문</label><input type="text" id="edRef" placeholder="예: 마가복음 10:1-12"></div>
     <div class="field"><label for="edNote">메모</label><textarea id="edNote" placeholder="쉰 이유, 나눔 요약, 기도제목 등"></textarea></div>
     <div class="row">
@@ -390,11 +394,19 @@ function isHQ(s){
   const nth = Math.ceil(d.getDate() / 7);
   return d.getMonth() < 6 ? (nth === 1 || nth === 3) : (nth === 2 || nth === 4);
 }
-const hqChecked = s => !!state.hq[s]?.checked;
+/* 본부아침예배로 드린 날은 sessions/{날짜}의 status "hq"로 남긴다. 인도 순서는 넘어가지 않고 연속 기록은 이어진다.
+   (hq/{날짜}는 이전 버전의 '안내 확인' 기록: 읽을 때만 같은 뜻으로 쳐 주고, 고칠 때 지운다) */
+const hqChecked = s => state.sessions[s]?.status === "hq" || (!state.sessions[s] && !!state.hq[s]?.checked);
+const dropLegacyHq = date => state.hq[date] ? state.db.doc("hq/" + date).delete() : Promise.resolve();
 async function setHq(date, on){
   if (hqChecked(date) === on) return true;
-  return write(() => on ? state.db.doc("hq/" + date).set({date, checked: true, checkedAt: new Date().toISOString()})
-                        : state.db.doc("hq/" + date).delete());
+  const prev = state.sessions[date];
+  return write(async () => {
+    if (on) await state.db.doc("sessions/" + date).set({date, status: "hq", leader: "", director: false,
+      ref: prev?.ref || "", note: prev?.note || "", updatedAt: new Date().toISOString()});
+    else if (prev?.status === "hq") await state.db.doc("sessions/" + date).delete();
+    await dropLegacyHq(date);
+  });
 }
 
 /* 다음 인도자: 오늘 이전 마지막 '나눈 날'의 인도자 다음 순서. 쉰 날은 순서를 넘기지 않는다. */
@@ -416,14 +428,14 @@ function nextMeetDay(fromStr){
 
 /* 연속 기록: 오늘(미기록이면 건너뜀)부터 거꾸로, 모임일과 기록된 날을 이어 보며 '나눈 날'이 끊길 때까지 센다. */
 function streak(){
-  const dates = Object.keys(state.sessions).sort();
+  const dates = [...Object.keys(state.sessions), ...Object.keys(state.hq)].sort();
   if (!dates.length) return {n:0, since:null};
   const first = dates[0];
   const d = parse(TODAY); let n = 0, since = null;
   while (iso(d) >= first){
-    const s = iso(d), rec = state.sessions[s];
+    const s = iso(d), rec = state.sessions[s] || (hqChecked(s) ? {status: "hq"} : null);
     if (rec || isMeetDay(s)){
-      if (rec?.status === "shared"){ n++; since = s; }
+      if (rec?.status === "shared" || rec?.status === "hq"){ n++; since = s; }
       else if (!(s === TODAY && !rec)) break;
     }
     d.setDate(d.getDate()-1);
@@ -446,7 +458,9 @@ function leadInfo(){
     return {label:"오늘 인도", who: todayRec.leader, date: TODAY, done:true,
       next: nextAfter(todayRec.leader)};
   }
-  const date = nextMeetDay(TODAY);
+  // 오늘을 본부아침예배로 기록했으면 다음 모임일의 인도자를 보여 준다
+  const from = parse(TODAY); if (hqChecked(TODAY)) from.setDate(from.getDate() + 1);
+  const date = nextMeetDay(iso(from));
   const last = lastSharedBefore(date);
   const who = last ? nextAfter(last.leader) : members()[0];
   return {label: date === TODAY ? "오늘의 인도자" : "다음 인도자", who, date, last, done:false};
@@ -469,9 +483,10 @@ function renderLead(){
     meta = info.last ? `${when} · 지난 나눔은 ${pretty(info.last.date)} ${info.last.leader}님` : `${when} · 첫 기록이에요`;
     const rec = state.sessions[TODAY];
     if (rec?.status === "skipped") meta = `오늘은 쉬었어요. 차례는 그대로 ${info.who}님이에요.`;
+    if (hqChecked(TODAY)) meta = `오늘은 본부아침예배로 기록했어요. ${pretty(info.date)} 차례는 그대로 ${info.who}님이에요.`;
   }
   $("leadMeta").textContent = meta;
-  const hqDate = info.done ? TODAY : info.date;
+  const hqDate = isHQ(TODAY) || info.done ? TODAY : info.date;
   $("hqBox").hidden = !isHQ(hqDate);
   if (isHQ(hqDate)){
     $("hqTitle").textContent = `${hqDate === TODAY ? "오늘은" : pretty(hqDate) + "은"} 본부아침예배 날이에요`;
@@ -491,7 +506,7 @@ function renderWord(){
 function renderStats(){
   const {n, since} = streak();
   $("streakNum").innerHTML = `${n}<small>회째</small>`;
-  $("streakSub").textContent = n ? `${pretty(since)}부터 모임일마다 이어서 나누고 있어요.` : "다음 모임부터 다시 이어가요.";
+  $("streakSub").textContent = n ? `${pretty(since)}부터 모임일마다 이어서 나누고 있어요. (본부아침예배 포함)` : "다음 모임부터 다시 이어가요.";
   const ms = members();
   const shared = Object.values(state.sessions).filter(s => s.status === "shared");
   const rows = ms.map(m => {
@@ -518,10 +533,11 @@ function renderCal(){
     let cls = "day", label = "";
     if (rec?.status === "shared"){ cls += rec.director ? " director" : " shared"; label = rec.leader || ""; }
     else if (rec?.status === "skipped"){ cls += " skipped"; label = "쉼"; }
+    else if (hqChecked(s)){ cls += " hqday"; label = "본부"; }
     else if (isMeetDay(s)) cls += " sched";
     if (s === TODAY) cls += " today";
     if (isHQ(s)) cls += hqChecked(s) ? " hq hqok" : " hq";
-    const aria = `${pretty(s)}${isHQ(s) ? " 본부아침예배" + (hqChecked(s) ? " 확인함" : "") : ""}${rec ? (rec.status==="shared" ? ` 나눔 ${rec.leader||""}${rec.director?" 실장님과 함께":""}` : " 쉼") : ""}`;
+    const aria = `${pretty(s)}${hqChecked(s) ? " 본부아침예배 드림" : isHQ(s) ? " 본부아침예배 날" : ""}${rec?.status==="shared" ? ` 나눔 ${rec.leader||""}${rec.director?" 실장님과 함께":""}` : rec?.status==="skipped" ? " 쉼" : ""}`;
     html += `<button type="button" class="${cls}" data-date="${s}" aria-label="${esc(aria)}"><span class="d">${d}</span><span class="l">${esc(label)}</span><span class="i">${esc(rec?.status === "shared" && label.length > 2 ? label.slice(-2) : label)}</span></button>`;
   }
   $("calGrid").innerHTML = html;
@@ -550,13 +566,12 @@ function openEditor(date){
   const suggested = (() => { const last = lastSharedBefore(date); return last ? nextAfter(last.leader) : members()[0]; })();
   $("edLeader").innerHTML = members().map(m => `<option>${esc(m)}</option>`).join("");
   $("edLeader").value = rec?.leader || suggested;
-  setStatus(rec?.status || "shared");
+  $("edHqBtn").hidden = !(isHQ(date) || hqChecked(date));
+  setStatus(rec?.status || (hqChecked(date) || isHQ(date) ? "hq" : "shared"));
   $("edDirector").checked = !!rec?.director;
-  $("edHqField").hidden = !isHQ(date);
-  $("edHq").checked = hqChecked(date);
   $("edRef").value = rec?.ref || "";
   $("edNote").value = rec?.note || "";
-  $("edDelete").hidden = !rec;
+  $("edDelete").hidden = !rec && !hqChecked(date);
   $("sheet").hidden = false;
   $("edLeader").focus();
 }
@@ -588,14 +603,14 @@ $("editForm").addEventListener("submit", async e => {
   const rec = {date, status, ref: $("edRef").value.trim(), note: $("edNote").value.trim(), updatedAt: new Date().toISOString()};
   if (status === "shared"){ rec.leader = $("edLeader").value; rec.director = $("edDirector").checked; }
   else { rec.leader = ""; rec.director = false; }
-  if (isHQ(date) && !(await setHq(date, $("edHq").checked))) return;
-  if (await write(() => state.db.doc("sessions/" + date).set(rec), "저장했어요")) closeEditor();
+  if (await write(async () => { await state.db.doc("sessions/" + date).set(rec); await dropLegacyHq(date); }, "저장했어요")) closeEditor();
 });
 $("edDelete").addEventListener("click", async () => {
   const b = $("edDelete");
   if (b.dataset.armed !== "1"){ b.dataset.armed = "1"; b.textContent = "한 번 더 누르면 지워져요"; setTimeout(() => { b.dataset.armed=""; b.textContent="기록 지우기"; }, 3000); return; }
   b.dataset.armed = ""; b.textContent = "기록 지우기";
-  if (await write(() => state.db.doc("sessions/" + state.editing).delete(), "지웠어요")) closeEditor();
+  const date = state.editing;
+  if (await write(async () => { await state.db.doc("sessions/" + date).delete(); await dropLegacyHq(date); }, "지웠어요")) closeEditor();
 });
 
 $("calGrid").addEventListener("click", e => { const b = e.target.closest("button[data-date]"); if (b) openEditor(b.dataset.date); });
@@ -604,7 +619,7 @@ $("nextM").addEventListener("click", () => { const v = state.view; v.m++; if (v.
 $("recordToday").addEventListener("click", () => openEditor(TODAY));
 $("hqCheck").addEventListener("change", async e => {
   const on = e.target.checked;
-  if (await setHq(e.target.dataset.date, on)) toast(on ? "본부아침예배 확인을 남겼어요" : "확인을 취소했어요");
+  if (await setHq(e.target.dataset.date, on)) toast(on ? "본부아침예배로 기록했어요" : "본부아침예배 기록을 취소했어요");
   else e.target.checked = !on;
 });
 
