@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<base target="_top">
+<meta charset="UTF-8">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<style>
+:root{
+  --bg:#f4f6f3; --card:#fff; --ink:#1d2a1f; --sub:#5d6b60; --line:#dfe5dd;
+  --brand:#2f7d32; --brand-ink:#fff; --soft:#e8f3e8; --warn:#b3261e; --chip:#eef1ec;
+}
+@media (prefers-color-scheme: dark){
+  :root{--bg:#121613; --card:#1c221d; --ink:#e6ece6; --sub:#9aa79c; --line:#2e372f;
+    --brand:#66bb6a; --brand-ink:#0d1a0e; --soft:#22331f; --warn:#ff8a80; --chip:#263027;}
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif;
+  font-size:18px;line-height:1.45;-webkit-text-size-adjust:100%}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+.hidden{display:none!important}
+
+/* 로그인 */
+#login{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 16px}
+#login h1{font-size:1.5rem;margin:0 0 6px}
+#login p{color:var(--sub);margin:0 0 20px;text-align:center}
+.dots{display:flex;gap:12px;margin:8px 0 18px;min-height:22px}
+.dots i{width:18px;height:18px;border-radius:50%;border:2px solid var(--brand);display:block}
+.dots i.on{background:var(--brand)}
+.pad{display:grid;grid-template-columns:repeat(3,84px);gap:12px}
+.pad button{height:72px;border-radius:18px;border:1px solid var(--line);background:var(--card);font-size:1.7rem;font-weight:600}
+.pad button:active{background:var(--soft)}
+.pad .fn{font-size:1rem;color:var(--sub)}
+.remember{margin:18px 0 6px;display:flex;align-items:center;gap:8px;color:var(--sub)}
+.remember input{width:22px;height:22px}
+.err{color:var(--warn);min-height:1.5em;text-align:center;margin-top:8px;font-weight:600}
+
+/* 상단 */
+header{position:sticky;top:0;z-index:5;background:var(--bg);padding:10px 16px 8px;border-bottom:1px solid var(--line)}
+.top{display:flex;align-items:center;gap:8px}
+.top h1{font-size:1.15rem;margin:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.who{font-size:.85rem;color:var(--sub)}
+.iconbtn{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:8px 12px;font-size:.95rem}
+.tabs{display:flex;gap:8px;overflow-x:auto;margin-top:10px;padding-bottom:2px}
+.tabs button{flex:0 0 auto;border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 14px;font-size:.95rem}
+.tabs button.on{background:var(--brand);color:var(--brand-ink);border-color:var(--brand);font-weight:700}
+.tools{display:flex;gap:8px;margin-top:10px}
+.tools input{flex:1;min-width:0;border:1px solid var(--line);background:var(--card);border-radius:12px;padding:10px 12px}
+.filters{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.filters button{border:none;background:var(--chip);border-radius:999px;padding:5px 12px;font-size:.88rem}
+.filters button.on{background:var(--soft);color:var(--brand);font-weight:700;outline:2px solid var(--brand)}
+
+main{padding:12px 16px 120px;max-width:760px;margin:0 auto}
+.count{color:var(--sub);font-size:.9rem;margin:2px 2px 10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;margin-bottom:12px}
+.card.done{opacity:.62}
+.card h3{margin:0 0 8px;font-size:1.05rem;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.card h3 .rn{font-size:.75rem;color:var(--sub);font-weight:400;margin-left:auto}
+.checks{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.chk{border:2px solid var(--line);background:var(--card);border-radius:14px;padding:8px 14px;font-weight:600;font-size:.98rem}
+.chk.on{background:var(--brand);border-color:var(--brand);color:var(--brand-ink)}
+dl{margin:0;display:grid;grid-template-columns:minmax(72px,30%) 1fr;gap:6px 10px}
+dt{color:var(--sub);font-size:.88rem;padding-top:2px;word-break:keep-all}
+dd{margin:0;word-break:break-all;min-height:1.4em}
+dd.edit{border-bottom:1px dashed var(--line);cursor:pointer}
+dd .empty{color:var(--line)}
+.reveal{border:none;background:var(--chip);border-radius:8px;padding:1px 8px;font-size:.8rem;margin-left:6px;vertical-align:1px}
+.shown{background:#fff3c4;color:#3b2f00;border-radius:6px;padding:0 4px}
+.shown a{color:inherit}
+.status{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 10px}
+.badge{border:none;border-radius:10px;padding:5px 10px;font-size:.92rem;font-weight:600}
+.badge.ok{background:var(--soft);color:var(--brand)}
+.badge.todo{background:#fde8e6;color:#a3261e}
+.badge.todo2{background:var(--chip);color:var(--sub)}
+.shipbtn{border:none;background:var(--brand);color:var(--brand-ink);border-radius:12px;padding:8px 16px;font-weight:700;font-size:1rem}
+.moretoggle{border:none;background:none;color:var(--sub);padding:8px 0 0;font-size:.9rem}
+dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
+.sheet input[type=date]{width:100%;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--bg)}
+.sheet .filters button{font-size:.95rem;padding:6px 14px}
+.seg{display:flex;margin-top:10px;background:var(--chip);border-radius:14px;padding:3px}
+.seg button{flex:1;border:none;background:none;border-radius:11px;padding:8px;font-weight:600;color:var(--sub)}
+.seg button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.mcard h3{font-size:1.15rem}
+.mrow{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--line)}
+.mrow:last-child{border-bottom:none}
+.mrow b{font-variant-numeric:tabular-nums;white-space:nowrap}
+.mrow.warn{color:#a3261e}
+.msub{color:var(--sub);font-size:.88rem;margin-top:8px}
+.mcard.year{border:2px solid var(--brand)}
+.selbar{position:fixed;left:0;right:0;bottom:0;z-index:7;background:var(--card);border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom));box-shadow:0 -4px 14px rgba(0,0,0,.12)}
+.selinfo{font-weight:700;margin-bottom:8px}
+.selbtns{display:flex;gap:8px}
+.selbtns button{flex:1;padding:12px 6px;border-radius:12px;border:1px solid var(--line);background:var(--card);font-weight:600}
+.selbtns .danger{background:#b3261e;border-color:#b3261e;color:#fff}
+.card.sel{outline:3px solid #b3261e}
+.pick{display:flex;align-items:center;gap:8px;margin:-2px 0 8px;font-weight:600;color:#b3261e}
+.pick input{width:24px;height:24px}
+#waitDev{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 16px;text-align:center}
+.wait .big{font-size:3rem}
+.wait h1{font-size:1.3rem;margin:8px 0}
+.wait p{color:var(--sub)}
+.linkbtn{display:block;margin:16px auto 0;border:none;background:none;color:var(--sub);text-decoration:underline}
+.adm h3{margin:18px 0 8px;font-size:1.05rem}
+.adm .sw{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.adm .sw input[type=checkbox]{width:24px;height:24px}
+.adm .times{display:flex;gap:8px;align-items:center;margin:8px 0}
+.adm .times input{flex:1;min-width:0;border:1px solid var(--line);border-radius:12px;padding:10px;background:var(--bg)}
+.adm .days{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+.adm .days button{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--card);font-weight:700}
+.adm .days button.on{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}
+.hint{color:var(--sub);font-size:.85rem;margin:4px 0}
+.adm select,.adm input[type=email]{width:100%;border:1px solid var(--line);border-radius:12px;padding:10px;background:var(--bg)}
+.dev{border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin:8px 0}
+.dev.pending{border:2px solid #e0a100;background:rgba(224,161,0,.08)}
+.dev .t{font-weight:700}
+.dev .s{color:var(--sub);font-size:.85rem}
+.dev .b{display:flex;gap:6px;margin-top:8px}
+.dev .b button{flex:1;padding:8px;border-radius:10px;border:1px solid var(--line);background:var(--card);font-weight:600}
+.dev .b .ok{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}
+.dev .b .no{color:#b3261e}
+.urlbox{word-break:break-all;background:var(--chip);border-radius:10px;padding:8px;font-size:.8rem}
+.more{display:block;width:100%;padding:14px;border:1px dashed var(--line);border-radius:14px;background:none;color:var(--sub)}
+.empty-state{text-align:center;color:var(--sub);padding:40px 0}
+
+.fab{position:fixed;right:16px;bottom:20px;z-index:6;border:none;background:var(--brand);color:var(--brand-ink);
+  border-radius:999px;padding:16px 22px;font-size:1.05rem;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.2)}
+
+/* 창 */
+.sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--card);width:100%;max-width:640px;max-height:90vh;overflow:auto;border-radius:22px 22px 0 0;padding:18px 16px 24px}
+.sheet h2{margin:0 0 12px;font-size:1.15rem}
+.sheet label{display:block;font-size:.9rem;color:var(--sub);margin:10px 0 4px}
+.sheet textarea,.sheet input[type=text]{width:100%;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--bg)}
+.sheet textarea{min-height:90px}
+.row-btns{display:flex;gap:10px;margin-top:16px}
+.row-btns button{flex:1;padding:14px;border-radius:14px;border:1px solid var(--line);background:var(--card);font-weight:600}
+.row-btns .primary{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 18px;border-radius:999px;z-index:20;font-size:.95rem;max-width:90vw;text-align:center}
+.busy{position:fixed;top:0;left:0;height:3px;background:var(--brand);z-index:30;animation:b 1s infinite linear;width:40%}
+@keyframes b{from{left:-40%}to{left:100%}}
+</style>
+</head>
+<body>
+
+<div id="busy" class="busy hidden"></div>
+
+<!-- 로그인 -->
+<section id="login">
+  <h1>🌱 <?= appTitle ?></h1>
+  <p>PIN 번호를 눌러 주세요</p>
+  <div class="dots" id="dots"></div>
+  <div class="pad" id="pad"></div>
+  <label class="remember"><input type="checkbox" id="remember"> 이 휴대폰에서 로그인 유지</label>
+  <div class="err" id="loginErr"></div>
+</section>
+
+<!-- 새 기기 승인 대기 -->
+<section id="waitDev" class="hidden">
+  <div class="wait">
+    <div class="big">📱</div>
+    <h1>승인을 기다리고 있어요</h1>
+    <p id="waitMsg">처음 쓰는 휴대폰이라 관리자 승인이 필요해요.<br>관리자에게 알림이 갔어요. 승인되면 자동으로 열려요.</p>
+    <button class="shipbtn" id="waitCheck">승인됐는지 확인</button>
+    <button class="linkbtn" id="waitCancel">처음으로</button>
+  </div>
+</section>
+
+<!-- 앱 -->
+<section id="app" class="hidden">
+  <header>
+    <div class="top">
+      <h1>🌱 <?= appTitle ?></h1>
+      <span class="who" id="who"></span>
+      <button class="iconbtn hidden" id="adminBtn" title="설정">⚙️</button>
+      <button class="iconbtn" id="refresh" title="새로고침">↻</button>
+      <button class="iconbtn" id="lockBtn" title="잠그기">🔒</button>
+    </div>
+    <div class="tabs" id="tabs"></div>
+    <div class="seg" id="seg"><button data-v="list" class="on">📋 주문</button><button data-v="sum">📊 월별 합계</button></div>
+    <div class="tools" id="toolsRow"><input id="q" type="search" placeholder="검색 (상품, 전화 끝 4자리 등)" autocomplete="off"><button class="iconbtn hidden" id="selBtn" title="골라서 비식별 처리">🔒 비식별</button></div>
+    <div class="filters" id="filters"></div>
+  </header>
+  <main>
+    <div class="count" id="count"></div>
+    <div id="list"></div>
+  </main>
+  <button class="fab hidden" id="addBtn">＋ 새 주문</button>
+  <div class="selbar hidden" id="selbar">
+    <div class="selinfo" id="selInfo">0건 선택</div>
+    <div class="selbtns">
+      <button id="selAll">전체 선택</button>
+      <button id="selCancel">취소</button>
+      <button id="selGo" class="danger">비식별 처리</button>
+    </div>
+  </div>
+</section>
+
+<div id="modal"></div>
+
+<script>
+(function(){
+  'use strict';
+  var KEY = 'farmOrders.token', DKEY = 'farmOrders.device';
+  var memDevice = null;
+  function deviceId(){
+    var d = load(DKEY);
+    if (!d){
+      var a = new Uint8Array(16); (window.crypto||window.msCrypto).getRandomValues(a);
+      d = Array.prototype.map.call(a, function(b){ return ('0'+b.toString(16)).slice(-2); }).join('');
+      store(DKEY, d);
+      if (load(DKEY)!==d){ memDevice = memDevice || d; d = memDevice; } // 저장이 안 되는 브라우저
+    }
+    return d;
+  }
+  function deviceLabel(){
+    var u = navigator.userAgent, os = /iPhone/.test(u)?'iPhone':/iPad/.test(u)?'iPad':/Android/.test(u)?'Android':/Windows/.test(u)?'Windows PC':/Mac/.test(u)?'Mac':'기기';
+    var br = /SamsungBrowser/.test(u)?'삼성 인터넷':/NAVER/.test(u)?'네이버앱':/KAKAOTALK/.test(u)?'카카오톡':/CriOS|Chrome/.test(u)?'Chrome':/Safari/.test(u)?'Safari':'브라우저';
+    var model = (u.match(/Android [\d.]+; ([^;)]+)/)||[])[1];
+    return os+(model&&!/^K$/.test(model)?' ('+model.trim()+')':'')+' · '+br;
+  }
+  var waitTicket = null, waitTimer = null;
+  var state = { token:null, data:null, sheet:null, filter:'all', q:'', shown:20, revealed:{}, view:'list', sum:null, selecting:false, picked:{} };
+  var $ = function(id){ return document.getElementById(id); };
+
+  function store(k, v){ try{ if(v==null) localStorage.removeItem(k); else localStorage.setItem(k, v); }catch(e){} }
+  function load(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+
+  var pending = 0;
+  function call(fn){
+    var args = Array.prototype.slice.call(arguments, 1);
+    pending++; $('busy').classList.remove('hidden');
+    return new Promise(function(res, rej){
+      var r = google.script.run
+        .withSuccessHandler(function(v){ done(); res(v); })
+        .withFailureHandler(function(e){ done(); rej(e); });
+      r[fn].apply(r, args);
+    });
+    function done(){ if(--pending<=0){ pending=0; $('busy').classList.add('hidden'); } }
+  }
+  function msgOf(e){ return String((e && e.message) || e).replace(/^(Error|Exception):\s*/,''); }
+  function toast(t){
+    var d = document.createElement('div'); d.className='toast'; d.textContent=t;
+    document.body.appendChild(d); setTimeout(function(){ d.remove(); }, 2600);
+  }
+  function handleErr(e){
+    var m = msgOf(e);
+    if (/^(AUTH|HOURS|BLOCKED):/.test(m)) { toLogin(m.replace(/^[A-Z]+:\s*/,'')); return; }
+    if (/^CONFLICT:/.test(m)) { toast(m.replace(/^CONFLICT:\s*/,'')); refresh(); return; }
+    toast(m.replace(/^[A-Z]+:\s*/,''));
+  }
+  function el(tag, cls, text){ var e=document.createElement(tag); if(cls) e.className=cls; if(text!=null) e.textContent=text; return e; }
+
+  /* ---------- 로그인 ---------- */
+  var pin = '';
+  function drawDots(){
+    var d=$('dots'); d.innerHTML='';
+    for (var i=0;i<Math.max(6,pin.length);i++){ var x=el('i', i<pin.length?'on':''); d.appendChild(x); }
+  }
+  function buildPad(){
+    var keys=['1','2','3','4','5','6','7','8','9','지우기','0','확인'];
+    keys.forEach(function(k){
+      var b=el('button', k.length>1?'fn':'', k);
+      b.type='button';
+      b.onclick=function(){
+        $('loginErr').textContent='';
+        if (k==='지우기') pin=pin.slice(0,-1);
+        else if (k==='확인') submit();
+        else if (pin.length<12) pin+=k;
+        drawDots();
+      };
+      $('pad').appendChild(b);
+    });
+    document.addEventListener('keydown', function(e){
+      if ($('login').classList.contains('hidden')) return;
+      if (/^\d$/.test(e.key) && pin.length<12) pin+=e.key;
+      else if (e.key==='Backspace') pin=pin.slice(0,-1);
+      else if (e.key==='Enter') submit();
+      drawDots();
+    });
+  }
+  function submit(){
+    if (pin.length<4) { $('loginErr').textContent='PIN 을 끝까지 눌러 주세요.'; return; }
+    var p=pin; pin=''; drawDots();
+    var remember=$('remember').checked;
+    call('login', p, remember, deviceId(), deviceLabel()).then(function(r){
+      if (r.pending){ startWait(r.ticket, remember); return; }
+      loggedIn(r, remember);
+    }).catch(function(e){ $('loginErr').textContent=msgOf(e).replace(/^[A-Z]+:\s*/,''); });
+  }
+  function loggedIn(r, remember){
+    stopWait();
+    state.token=r.token;
+    if (remember) store(KEY, r.token); else store(KEY, null);
+    $('login').classList.add('hidden'); $('waitDev').classList.add('hidden'); $('app').classList.remove('hidden');
+    refresh();
+  }
+  function startWait(ticket, remember){
+    waitTicket={t:ticket, remember:remember};
+    $('login').classList.add('hidden'); $('waitDev').classList.remove('hidden');
+    stopWait(true);
+    waitTimer=setInterval(function(){ if(!document.hidden) checkWait(true); }, 15000);
+  }
+  function stopWait(keepTicket){ if(waitTimer){ clearInterval(waitTimer); waitTimer=null; } if(!keepTicket) waitTicket=null; }
+  function checkWait(silent){
+    if (!waitTicket) return;
+    var w=waitTicket;
+    call('checkDevice', w.t, deviceId()).then(function(r){
+      if (r.pending){ if(!silent) toast('아직 승인 전이에요'); return; }
+      loggedIn(r, w.remember);
+    }).catch(function(e){
+      stopWait(); $('waitDev').classList.add('hidden'); toLogin(msgOf(e).replace(/^[A-Z]+:\s*/,''));
+    });
+  }
+  function toLogin(msg){
+    stopWait(); $('waitDev').classList.add('hidden');
+    state.token=null; state.data=null; state.revealed={}; store(KEY,null);
+    $('list').innerHTML=''; $('modal').innerHTML='';
+    $('app').classList.add('hidden'); $('login').classList.remove('hidden');
+    $('loginErr').textContent=msg||'';
+  }
+
+  /* ---------- 데이터 ---------- */
+  function refresh(){
+    if (!state.token) return;
+    return call('getData', state.token, state.sheet).then(function(d){
+      state.data=d; state.sheet=d.sheet; state.revealed={};
+      render();
+      if (state.view==='sum') loadSummary();
+    }).catch(handleErr);
+  }
+
+  function checkCols(){ return state.data.cols.filter(function(c){ return c.check && !c.empty && !c.settle; }); }
+  function colBy(fn){ return state.data.cols.filter(fn)[0]; }
+  function shipCol(kind){ return colBy(function(c){ return c.ship===kind; }); }
+  function settleCol(){ return colBy(function(c){ return c.settle; }); }
+  function hasShip(){ return !!(shipCol('invoice') || shipCol('date')); }
+  function isShipped(row){
+    var a=shipCol('invoice'), b=shipCol('date');
+    return !!((a && String(row.v[a.i]).trim()) || (b && String(row.v[b.i]).trim()));
+  }
+  function isSettled(row){
+    var c=settleCol(); if(!c) return false;
+    var v=row.v[c.i]; if (v===true) return true; if (v===false) return false;
+    v=String(v).trim().toLowerCase(); if(!v) return false;
+    return state.data.settledValues.some(function(s){ return v===String(s).toLowerCase(); }) || v.indexOf('완료')>=0;
+  }
+  function isDone(row){
+    if (hasShip()) return isShipped(row);
+    var cc=checkCols(); if(!cc.length) return false;
+    return row.v[cc[cc.length-1].i]===true;
+  }
+
+  function render(){
+    var d=state.data;
+    $('who').textContent=d.user.name+' · '+d.user.roleName;
+    var tabs=$('tabs'); tabs.innerHTML='';
+    if (d.sheets.length>1) d.sheets.forEach(function(n){
+      var b=el('button', n===d.sheet?'on':'', n);
+      b.onclick=function(){ state.sheet=n; state.shown=20; state.filter='all'; refresh(); };
+      tabs.appendChild(b);
+    });
+    tabs.classList.toggle('hidden', d.sheets.length<=1);
+    var f=$('filters'); f.innerHTML='';
+    var cnt=function(fn){ return d.rows.filter(fn).length; };
+    var opts=[['all','전체', d.rows.length]];
+    if (hasShip()){
+      opts.push(['todo','📦 발송 전', cnt(function(r){ return !isShipped(r); })]);
+      opts.push(['done','발송 완료', cnt(isShipped)]);
+    } else if (checkCols().length){
+      opts.push(['todo','안 끝난 것', cnt(function(r){ return !isDone(r); })]);
+      opts.push(['done','끝난 것', cnt(isDone)]);
+    }
+    if (settleCol()) opts.push(['unsettled','정산 안 된 것', cnt(function(r){ return !isSettled(r); })]);
+    checkCols().forEach(function(c){ opts.push(['not:'+c.i, c.name+' 안 한 것', cnt(function(r){ return r.v[c.i]!==true; })]); });
+    if (opts.length>1) opts.forEach(function(o){
+      var b=el('button', state.filter===o[0]?'on':'', o[1]+' '+o[2]);
+      b.onclick=function(){ state.filter=o[0]; state.shown=20; render(); };
+      f.appendChild(b);
+    });
+    var sum=state.view==='sum';
+    $('toolsRow').classList.toggle('hidden', sum);
+    f.classList.toggle('hidden', sum || opts.length<=1);
+    $('selBtn').classList.toggle('hidden', d.user.role!=='admin');
+    $('adminBtn').classList.toggle('hidden', d.user.role!=='admin');
+    $('addBtn').classList.toggle('hidden', sum || state.selecting || d.user.role==='viewer');
+    $('selbar').classList.toggle('hidden', sum || !state.selecting);
+    if (sum) { if (state.sum) drawSummary(); } else drawList();
+  }
+
+  function won(n){ return Math.round(n).toLocaleString('ko-KR')+'원'; }
+  function loadSummary(){
+    $('count').textContent='합계를 계산하는 중…'; $('list').innerHTML='';
+    return call('getSummary', state.token, state.sheet).then(function(s){ s._sheet=state.sheet; state.sum=s; if(state.view==='sum') drawSummary(); }).catch(handleErr);
+  }
+  function drawSummary(){
+    var s=state.sum, list=$('list'); list.innerHTML='';
+    $('count').textContent=s.monthName+' 기준 · 시트 전체';
+    if (!s.months.length){ list.appendChild(el('div','empty-state','날짜가 들어 있는 주문이 없어요')); return; }
+    // 연도별 합계
+    var years={};
+    s.months.forEach(function(m){
+      var y=m.month.slice(0,4), Y=years[y]||(years[y]={month:y+'년', count:0, unshipped:0, unsettled:0, sums:s.sumNames.map(function(){return 0;}), unsettledSums:s.sumNames.map(function(){return 0;}), groups:{}});
+      Y.count+=m.count; Y.unshipped+=m.unshipped; Y.unsettled+=m.unsettled;
+      m.sums.forEach(function(v,k){ Y.sums[k]+=v; Y.unsettledSums[k]+=m.unsettledSums[k]; });
+      Object.keys(m.groups).forEach(function(g){ Y.groups[g]=(Y.groups[g]||0)+m.groups[g]; });
+    });
+    var thisYear=String(new Date().getFullYear());
+    if (years[thisYear]) list.appendChild(monthCard(years[thisYear], s, thisYear+'년 합계', true));
+    s.months.forEach(function(m){
+      var p=m.month.split('-');
+      list.appendChild(monthCard(m, s, p[0]+'년 '+Number(p[1])+'월', false));
+    });
+    Object.keys(years).sort().reverse().forEach(function(y){ if (y!==thisYear) list.appendChild(monthCard(years[y], s, y+'년 합계', true)); });
+  }
+  function monthCard(m, s, title, isYear){
+    var c=el('div','card mcard'+(isYear?' year':''));
+    var h=el('h3'); h.appendChild(el('span','',title)); h.appendChild(el('span','rn', m.count+'건')); c.appendChild(h);
+    var row=function(label, val, cls){ var r=el('div','mrow'+(cls?' '+cls:'')); r.appendChild(el('span','',label)); r.appendChild(el('b','',val)); c.appendChild(r); };
+    s.sumNames.forEach(function(n,k){ row(n, won(m.sums[k])); });
+    if (s.hasShip && m.unshipped) row('📦 발송 전', m.unshipped+'건', 'warn');
+    if (s.hasSettle && m.unsettled){
+      row('정산 안 된 주문', m.unsettled+'건', 'warn');
+      s.sumNames.forEach(function(n,k){ if (m.unsettledSums[k]) row('└ 미정산 '+n, won(m.unsettledSums[k]), 'warn'); });
+    }
+    var g=Object.keys(m.groups).sort(function(a,b){ return m.groups[b]-m.groups[a]; });
+    if (s.groupName && g.length) c.appendChild(el('div','msub', s.groupName+': '+g.map(function(k){ return k+' '+m.groups[k]+'건'; }).join(' · ')));
+    return c;
+  }
+
+  function matches(row){
+    var f=state.filter;
+    if (f==='todo' && isDone(row)) return false;
+    if (f==='done' && !isDone(row)) return false;
+    if (f==='unsettled' && isSettled(row)) return false;
+    if (f.indexOf('not:')===0 && row.v[Number(f.slice(4))]===true) return false;
+    if (state.q){
+      var q=state.q.toLowerCase().replace(/\s/g,'');
+      var hay=row.v.map(function(x){ return typeof x==='boolean'?'':String(x); }).join(' ').toLowerCase().replace(/\s/g,'');
+      if (hay.indexOf(q)<0) return false;
+    }
+    return true;
+  }
+
+  function titleCols(){
+    var c=state.data.cols.filter(function(x){ return !x.empty && !x.check; });
+    var t=c.filter(function(x){ return x.title; });
+    if (t.length) return t.map(function(x){ return x.i; });
+    var out=[], dc=c.filter(function(x){ return x.date && !x.pii; })[0];
+    if (dc) out.push(dc.i);
+    c.forEach(function(x){ if (out.length<3 && !x.pii && !x.date) out.push(x.i); });
+    return out;
+  }
+
+  function today(){ var t=new Date(); return t.getFullYear()+'-'+('0'+(t.getMonth()+1)).slice(-2)+'-'+('0'+t.getDate()).slice(-2); }
+
+  function fieldRow(dl, row, c, canEdit){
+    var dt=el('dt','',c.name), dd=el('dd');
+    var key=row.r+':'+c.i, val=row.v[c.i];
+    if (state.revealed[key]!=null){
+      var s=el('span','shown'); var real=state.revealed[key];
+      if (c.pii==='phone'){ var a=el('a','',real); a.href='tel:'+real.replace(/[^\d+]/g,''); s.appendChild(a); }
+      else s.textContent=real;
+      dd.appendChild(s);
+      var cp=el('button','reveal','복사'); cp.onclick=function(ev){ ev.stopPropagation(); copy(real); };
+      dd.appendChild(cp);
+    } else {
+      if (val==='') dd.appendChild(el('span','empty','—')); else dd.appendChild(document.createTextNode(val));
+      if (row.m.indexOf(c.i)>=0){
+        var rb=el('button','reveal','보기');
+        rb.onclick=function(ev){
+          ev.stopPropagation();
+          call('reveal', state.token, state.data.sheet, row.r, c.i).then(function(v){
+            state.revealed[key]=v; drawList();
+            setTimeout(function(){ if(state.revealed[key]!=null){ delete state.revealed[key]; drawList(); } }, 60000);
+          }).catch(handleErr);
+        };
+        dd.appendChild(rb);
+      }
+    }
+    if (canEdit && !c.readonly){ dd.className='edit'; dd.onclick=function(){ editCell(row, c); }; }
+    dl.appendChild(dt); dl.appendChild(dd);
+  }
+
+  function drawList(){
+    var d=state.data, list=$('list'); list.innerHTML='';
+    var rows=d.rows.filter(matches);
+    $('count').textContent=rows.length+'건'+(d.truncated?' (최근 '+d.rows.length+'행만 불러옴)':'');
+    if (!rows.length){ list.appendChild(el('div','empty-state', d.rows.length?'조건에 맞는 주문이 없어요':'아직 주문이 없어요')); return; }
+    var tc=titleCols(), canEdit=d.user.role!=='viewer';
+    var sc=settleCol(), inv=shipCol('invoice'), cou=shipCol('courier'), dat=shipCol('date');
+    rows.slice(0, state.shown).forEach(function(row){
+      var card=el('div','card'+(isDone(row)?' done':'')+(state.picked[row.r]?' sel':''));
+      if (state.selecting){
+        var pk=el('label','pick'), cb=el('input'); cb.type='checkbox'; cb.checked=!!state.picked[row.r];
+        cb.onchange=function(){ if(cb.checked) state.picked[row.r]=1; else delete state.picked[row.r]; card.classList.toggle('sel', cb.checked); selInfo(); };
+        pk.appendChild(cb); pk.appendChild(document.createTextNode(' 비식별 처리할 주문으로 고르기')); card.appendChild(pk);
+      }
+      var h=el('h3');
+      tc.forEach(function(i, k){ if(row.v[i]!=='') h.appendChild(el('span','', (h.childNodes.length?'· ':'')+row.v[i])); });
+      if (!h.childNodes.length) h.appendChild(el('span','','(내용 없음)'));
+      h.appendChild(el('span','rn', row.r+'행'));
+      card.appendChild(h);
+
+      // 상태 줄: 발송 / 정산
+      var st=el('div','status');
+      if (hasShip()){
+        if (isShipped(row)){
+          var txt='✔ 발송'+(dat&&row.v[dat.i]?' '+row.v[dat.i]:'')+(cou&&row.v[cou.i]?' · '+row.v[cou.i]:'')+(inv&&row.v[inv.i]?' '+row.v[inv.i]:'');
+          st.appendChild(el('span','badge ok',txt));
+        } else {
+          st.appendChild(el('span','badge todo','📦 발송 전'));
+          if (canEdit && inv && !inv.readonly){
+            var sb=el('button','shipbtn','발송 처리');
+            sb.onclick=function(){ shipDialog(row); };
+            st.appendChild(sb);
+          }
+        }
+      }
+      if (sc){
+        var ok=isSettled(row);
+        var bb=el('button','badge '+(ok?'ok':'todo2'), ok?'✔ 정산 완료':'정산 전');
+        bb.disabled=!canEdit || sc.readonly;
+        bb.onclick=function(){
+          var next = sc.check ? !ok : (ok ? '' : d.settleMark);
+          var nm=row.v[sc.i];
+          if (!confirm(ok?'정산 완료를 취소할까요?':'정산 완료로 표시할까요?')) return;
+          call('updateCell', state.token, d.sheet, row.r, sc.i, nm, next).then(function(v){ row.v[sc.i]=v; render(); }).catch(handleErr);
+        };
+        st.appendChild(bb);
+      }
+      if (st.childNodes.length) card.appendChild(st);
+
+      var cc=checkCols();
+      if (cc.length){
+        var box=el('div','checks');
+        cc.forEach(function(c){
+          var on=row.v[c.i]===true;
+          var b=el('button','chk'+(on?' on':''), (on?'✔ ':'')+c.name);
+          b.disabled=!canEdit || c.readonly;
+          b.onclick=function(){
+            call('updateCell', state.token, d.sheet, row.r, c.i, on, !on).then(function(v){ row.v[c.i]=v; render(); }).catch(handleErr);
+          };
+          box.appendChild(b);
+        });
+        card.appendChild(box);
+      }
+
+      var main=el('dl'), more=el('dl','detail'), moreCount=0;
+      d.cols.forEach(function(c){
+        if (c.check || c.settle || c.title || (c.empty && row.v[c.i]==='')) return;
+        if (c.ship && isShipped(row)) { /* 상태 줄에 이미 보임 → 자세히로 */ fieldRow(more,row,c,canEdit); moreCount++; return; }
+        if (c.ship && !isShipped(row)) return; // 발송 전엔 발송 처리 버튼으로
+        if (c.detail) { fieldRow(more,row,c,canEdit); moreCount++; return; }
+        fieldRow(main,row,c,canEdit);
+      });
+      // 제목 열도 고칠 수 있게 자세히에 넣음
+      d.cols.forEach(function(c){ if (c.title && !c.check){ fieldRow(more,row,c,canEdit); moreCount++; } });
+      card.appendChild(main);
+      if (moreCount){
+        var key='open:'+row.r, open=!!state.revealed[key];
+        var tg=el('button','moretoggle', open?'접기 ▴':'자세히 ▾');
+        more.classList.toggle('hidden', !open);
+        tg.onclick=function(){ if(state.revealed[key]) delete state.revealed[key]; else state.revealed[key]=1; drawList(); };
+        card.appendChild(tg); card.appendChild(more);
+      }
+      list.appendChild(card);
+    });
+    if (rows.length>state.shown){
+      var m=el('button','more','더 보기 ('+(rows.length-state.shown)+'건 남음)');
+      m.onclick=function(){ state.shown+=30; drawList(); };
+      list.appendChild(m);
+    }
+  }
+
+  function shipDialog(row){
+    var d=state.data, cou=shipCol('courier'), dat=shipCol('date');
+    var ci, ii, di;
+    openModal('📦 발송 처리', function(sh){
+      var tc=titleCols().map(function(i){ return row.v[i]; }).filter(Boolean).join(' · ');
+      sh.appendChild(el('p','', tc));
+      if (cou){
+        sh.appendChild(el('label','', cou.name));
+        ci=el('input'); ci.type='text'; ci.value=row.v[cou.i] || d.couriers[0] || ''; sh.appendChild(ci);
+        if (d.couriers.length){
+          var chips=el('div','filters');
+          d.couriers.forEach(function(v){ var b=el('button','',v); b.type='button'; b.onclick=function(){ ci.value=v; }; chips.appendChild(b); });
+          sh.appendChild(chips);
+        }
+      }
+      sh.appendChild(el('label','', shipCol('invoice').name));
+      ii=el('input'); ii.type='text'; ii.inputMode='numeric'; ii.placeholder='송장번호 숫자'; sh.appendChild(ii);
+      if (dat){
+        sh.appendChild(el('label','', dat.name));
+        di=el('input'); di.type='date'; di.value=today(); sh.appendChild(di);
+      }
+    }, function(){
+      return call('markShipped', state.token, d.sheet, row.r, ci?ci.value:'', ii.value.replace(/[\s-]/g,''), di?di.value:'')
+        .then(function(){ toast('발송 처리했어요'); return refresh(); })
+        .catch(function(e){ handleErr(e); throw e; });
+    });
+  }
+
+  function copy(t){
+    var ok=function(){ toast('복사했어요'); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(ok, fallback); else fallback();
+    function fallback(){
+      var ta=el('textarea'); ta.value=t; document.body.appendChild(ta); ta.select();
+      try{ document.execCommand('copy'); ok(); }catch(e){ toast('복사가 안 돼요. 길게 눌러 복사해 주세요.'); }
+      ta.remove();
+    }
+  }
+
+  /* ---------- 고치기 / 추가 ---------- */
+  function openModal(title, build, onSave){
+    var bg=el('div','sheet-bg'), sh=el('div','sheet');
+    sh.appendChild(el('h2','',title));
+    build(sh);
+    var btns=el('div','row-btns');
+    var cancel=el('button','', '취소'), save=el('button','primary','저장');
+    cancel.onclick=close; save.onclick=function(){ save.disabled=true; onSave().then(close, function(){ save.disabled=false; }); };
+    btns.appendChild(cancel); btns.appendChild(save); sh.appendChild(btns);
+    bg.appendChild(sh); bg.onclick=function(e){ if(e.target===bg) close(); };
+    $('modal').innerHTML=''; $('modal').appendChild(bg);
+    var f=sh.querySelector('textarea,input'); if(f) setTimeout(function(){ f.focus(); }, 50);
+    function close(){ $('modal').innerHTML=''; }
+  }
+
+  function editCell(row, c){
+    var masked=row.m.indexOf(c.i)>=0, key=row.r+':'+c.i;
+    if (masked && state.revealed[key]==null){
+      // 가려진 칸은 먼저 진짜 값을 불러와서(기록 남음) 그 값을 고치게 함
+      call('reveal', state.token, state.data.sheet, row.r, c.i).then(function(v){
+        state.revealed[key]=v; drawList(); editCell(row, c);
+      }).catch(handleErr);
+      return;
+    }
+    var start=masked ? state.revealed[key] : row.v[c.i];
+    var ta;
+    openModal(c.name+' 고치기', function(sh){
+      if (c.date && !c.pii) sh.appendChild(el('p','hint','11/5, 11.5, 1105, 오늘·어제 처럼 써도 날짜로 바꿔서 넣어요.'));
+      ta=el('textarea'); ta.value=start; sh.appendChild(ta);
+    }, function(){
+      return call('updateCell', state.token, state.data.sheet, row.r, c.i, row.v[c.i], ta.value).then(function(v){
+        row.v[c.i]=v; delete state.revealed[key];
+        if (v!==ta.value && c.pii){ if(row.m.indexOf(c.i)<0) row.m.push(c.i); }
+        drawList(); toast('저장했어요');
+      }).catch(function(e){ handleErr(e); throw e; });
+    });
+  }
+
+  function addNew(){
+    var d=state.data, inputs={};
+    openModal('새 주문 ('+d.sheet+')', function(sh){
+      d.cols.forEach(function(c){
+        if (c.empty || c.readonly || c.serial) return;
+        if (c.check){
+          var lb=el('label','remember'); var cb=el('input'); cb.type='checkbox';
+          lb.appendChild(cb); lb.appendChild(document.createTextNode(' '+c.name)); sh.appendChild(lb);
+          inputs[c.i]=cb; return;
+        }
+        sh.appendChild(el('label','',c.name));
+        var inp=el('input'); inp.type='text';
+        if (c.date){ inp.value=today(); inp.placeholder='11/5 처럼 써도 돼요'; }
+        if (c.pii==='phone') inp.inputMode='tel';
+        sh.appendChild(inp); inputs[c.i]=inp;
+      });
+    }, function(){
+      var vals={};
+      Object.keys(inputs).forEach(function(i){ var x=inputs[i]; vals[i]= x.type==='checkbox' ? x.checked : x.value; });
+      return call('addRow', state.token, d.sheet, vals).then(function(){ toast('추가했어요'); return refresh(); })
+        .catch(function(e){ handleErr(e); throw e; });
+    });
+  }
+
+  /* ---------- 골라서 비식별 처리 (관리자) ---------- */
+  function selInfo(){ $('selInfo').textContent=Object.keys(state.picked).length+'건 선택'; }
+  function setSelecting(on){
+    state.selecting=on; state.picked={};
+    if (on && state.view!=='list'){ $('seg').children[0].click(); }
+    selInfo(); render();
+  }
+  function runAnonymize(){
+    var rows=Object.keys(state.picked).map(Number);
+    if (!rows.length){ toast('먼저 주문을 골라 주세요'); return; }
+    var picked=state.data.rows.filter(function(r){ return state.picked[r.r]; });
+    var notShipped=hasShip()?picked.filter(function(r){ return !isShipped(r); }).length:0;
+    var notSettled=settleCol()?picked.filter(function(r){ return !isSettled(r); }).length:0;
+    var msg=rows.length+'건의 성명·휴대폰·주소·우편번호·배송메모를 비식별 처리합니다.\n시트에서 되돌릴 수 없어요.';
+    if (notShipped) msg+='\n\n⚠️ 이 중 '+notShipped+'건은 아직 발송 전이에요. 주소가 지워지면 보낼 수 없어요.';
+    if (notSettled) msg+='\n⚠️ 이 중 '+notSettled+'건은 아직 정산 전이에요.';
+    if (!confirm(msg+'\n\n계속할까요?')) return;
+    if ((notShipped) && prompt('발송 전 주문이 있어요. 정말 하려면 "비식별" 이라고 입력하세요.')!=='비식별'){ toast('취소했어요'); return; }
+    call('anonymizeRows', state.token, state.data.sheet, rows).then(function(n){
+      toast(n+'건을 비식별 처리했어요'); state.selecting=false; state.picked={}; state.sum=null; refresh();
+    }).catch(handleErr);
+  }
+
+  /* ---------- ⚙️ 관리자 설정 ---------- */
+  var DAYN=['일','월','화','수','목','금','토'];
+  function fmtTime(ms){ if(!ms) return '-'; var d=new Date(ms); return (d.getMonth()+1)+'/'+d.getDate()+' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); }
+  function openAdmin(){
+    call('getAdmin', state.token).then(drawAdmin).catch(handleErr);
+  }
+  function drawAdmin(a){
+    var st=JSON.parse(JSON.stringify(a.settings)), H=st.hours, N=st.notify;
+    var bg=el('div','sheet-bg'), sh=el('div','sheet adm');
+    sh.appendChild(el('h2','','⚙️ 설정'));
+    var sw=function(label, obj, key, hint){
+      var r=el('label','sw'); var t=el('span','',label); r.appendChild(t);
+      var cb=el('input'); cb.type='checkbox'; cb.checked=!!obj[key]; cb.onchange=function(){ obj[key]=cb.checked; }; r.appendChild(cb);
+      sh.appendChild(r); if(hint) sh.appendChild(el('div','hint',hint)); return cb;
+    };
+
+    // 기기 관리
+    sh.appendChild(el('h3','','📱 기기 관리'+(a.deviceApproval?'':' (승인제 꺼짐)')));
+    if (!a.devices.length) sh.appendChild(el('div','hint','등록된 기기가 없어요.'));
+    a.devices.forEach(function(d){
+      var box=el('div','dev'+(d.status==='pending'?' pending':''));
+      box.appendChild(el('div','t',d.name+' · '+d.label));
+      box.appendChild(el('div','s',{pending:'⏳ 승인 대기',approved:'✅ 승인됨',blocked:'⛔ 차단'}[d.status]+' · 요청 '+fmtTime(d.at)+(d.last?' · 마지막 접속 '+fmtTime(d.last):'')));
+      var b=el('div','b');
+      var act=function(label, cls, action, ask){ var x=el('button',cls,label); x.onclick=function(){ if(ask && !confirm(ask)) return; call('setDevice', state.token, d.key, action).then(function(r){ close(); drawAdmin(r); toast(label+' 완료'); }).catch(handleErr); }; b.appendChild(x); };
+      if (d.status!=='approved') act('승인','ok','approve');
+      if (d.status!=='blocked') act('차단','no','block', d.name+' · '+d.label+'\n이 기기를 차단할까요? 바로 로그아웃돼요.');
+      act('삭제','','delete','목록에서 지울까요? 다시 들어오려면 승인이 필요해요.');
+      box.appendChild(b); sh.appendChild(box);
+    });
+
+    // 접속 가능 시간
+    sh.appendChild(el('h3','','🕐 접속 가능 시간'));
+    sw('접속 시간 제한 사용', H, 'on', '켜면 아래 요일·시간에만 부모님이 들어올 수 있어요. 시간이 지나면 쓰던 화면도 잠겨요. (기준: '+a.tz+')');
+    var tm=el('div','times');
+    var s1=el('input'); s1.type='time'; s1.value=H.start; s1.onchange=function(){ H.start=s1.value; };
+    var s2=el('input'); s2.type='time'; s2.value=H.end; s2.onchange=function(){ H.end=s2.value; };
+    tm.appendChild(s1); tm.appendChild(el('span','','~')); tm.appendChild(s2); sh.appendChild(tm);
+    sh.appendChild(el('div','hint','끝 시간이 시작보다 이르면 밤을 넘겨 다음 날까지로 봐요 (예: 22:00~02:00).'));
+    var dy=el('div','days');
+    DAYN.forEach(function(n,i){ var b=el('button',H.days.indexOf(i)>=0?'on':'',n); b.type='button';
+      b.onclick=function(){ var k=H.days.indexOf(i); if(k>=0) H.days.splice(k,1); else H.days.push(i); b.classList.toggle('on', k<0); }; dy.appendChild(b); });
+    sh.appendChild(dy);
+    sw('관리자(나)에게도 적용', H, 'admin', '끄면 나는 언제든 들어올 수 있어요 (권장: 끔 — 켜면 시간 밖에서는 이 설정도 못 바꿔요).');
+
+    // 알림
+    sh.appendChild(el('h3','','🔔 알림 메일'));
+    sh.appendChild(el('div','hint','받는 주소 (비우면 '+a.ownerEmail+')'));
+    var em=el('input'); em.type='email'; em.value=N.email; em.placeholder=a.ownerEmail; em.onchange=function(){ N.email=em.value.trim(); }; sh.appendChild(em);
+    sw('새 기기 승인 요청 즉시 알림', N, 'device');
+    sw('PIN 연속 실패로 잠겼을 때 즉시 알림', N, 'lock');
+    sw('부모님이 개인정보를 볼 때마다 즉시 알림', N, 'revealNow', '메일이 많이 올 수 있어요. 보통은 하루 요약으로 충분해요.');
+    sw('하루 접속 요약 메일', N, 'daily', '지난 24시간 로그인·개인정보 보기·수정·실패 기록을 모아서 보내요 (기록이 없으면 안 보냄).');
+    var hs=el('select'); for (var h=0; h<24; h++){ var o=el('option','',h+'시쯤'); o.value=h; if(h===N.dailyHour) o.selected=true; hs.appendChild(o); }
+    hs.onchange=function(){ N.dailyHour=Number(hs.value); }; sh.appendChild(hs);
+
+    // 웹앱 주소
+    sh.appendChild(el('h3','','🔗 웹앱 주소'));
+    sh.appendChild(el('div','urlbox', a.url||'(배포 후 표시)'));
+    sh.appendChild(el('div','hint','주소가 다른 사람에게 퍼진 것 같으면: 시트 메뉴 🔐 주문관리 → "웹앱 주소 바꾸기" (모든 로그인·기기 초기화 + 새 주소 만드는 법 안내)'));
+
+    var btns=el('div','row-btns');
+    var cancel=el('button','','닫기'), save=el('button','primary','설정 저장');
+    cancel.onclick=close;
+    save.onclick=function(){
+      if (H.on && !H.days.length){ toast('요일을 하나 이상 골라 주세요'); return; }
+      save.disabled=true;
+      call('saveSettings', state.token, st).then(function(){ toast('저장했어요'); close(); }).catch(function(e){ save.disabled=false; handleErr(e); });
+    };
+    btns.appendChild(cancel); btns.appendChild(save); sh.appendChild(btns);
+    bg.appendChild(sh); bg.onclick=function(e){ if(e.target===bg) close(); };
+    $('modal').innerHTML=''; $('modal').appendChild(bg);
+    function close(){ $('modal').innerHTML=''; }
+  }
+
+  /* ---------- 시작 ---------- */
+  buildPad(); drawDots();
+  $('refresh').onclick=function(){ state.sum=null; refresh(); };
+  Array.prototype.forEach.call($('seg').children, function(b){
+    b.onclick=function(){
+      state.view=b.getAttribute('data-v');
+      Array.prototype.forEach.call($('seg').children, function(x){ x.classList.toggle('on', x===b); });
+      if (!state.data) return;
+      render();
+      if (state.view==='sum' && (!state.sum || state.sum._sheet!==state.sheet)) loadSummary();
+    };
+  });
+  $('lockBtn').onclick=function(){ var t=state.token; toLogin('잠갔어요'); if(t) call('logout', t).catch(function(){}); };
+  $('addBtn').onclick=addNew;
+  $('adminBtn').onclick=openAdmin;
+  // 5분마다 새로 불러오기 (다른 분이 고친 것 반영 + 접속 시간이 끝나면 잠금)
+  setInterval(function(){
+    if (state.token && !document.hidden && !$('modal').innerHTML && !state.selecting) refresh();
+  }, 5*60000);
+  $('waitCheck').onclick=function(){ checkWait(false); };
+  $('waitCancel').onclick=function(){ stopWait(); toLogin(''); };
+  $('selBtn').onclick=function(){ setSelecting(!state.selecting); };
+  $('selCancel').onclick=function(){ setSelecting(false); };
+  $('selAll').onclick=function(){
+    var vis=state.data.rows.filter(matches);
+    var all=vis.every(function(r){ return state.picked[r.r]; });
+    vis.forEach(function(r){ if(all) delete state.picked[r.r]; else state.picked[r.r]=1; });
+    $('selAll').textContent=all?'전체 선택':'전체 해제';
+    selInfo(); drawList();
+  };
+  $('selGo').onclick=runAnonymize;
+  var qt; $('q').oninput=function(){ clearTimeout(qt); var v=this.value; qt=setTimeout(function(){ state.q=v.trim(); state.shown=20; drawList(); }, 200); };
+
+  // 화면을 오래 안 보면(30분) 가린 정보 다시 숨기고, 로그인 유지 안 한 경우엔 잠금
+  var hiddenAt=0;
+  document.addEventListener('visibilitychange', function(){
+    if (document.hidden){ hiddenAt=Date.now(); state.revealed={}; if(state.data) drawList(); }
+    else if (hiddenAt && Date.now()-hiddenAt>30*60000){
+      if (!load(KEY) && state.token){ var t=state.token; toLogin('오래 쉬어서 잠갔어요'); call('logout', t).catch(function(){}); }
+      else refresh();
+    }
+  });
+
+  var saved=load(KEY);
+  if (saved){
+    state.token=saved;
+    $('login').classList.add('hidden'); $('app').classList.remove('hidden');
+    refresh();
+  }
+})();
+</script>
+</body>
+</html>
