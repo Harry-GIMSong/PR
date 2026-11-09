@@ -54,7 +54,7 @@ const CONFIG = {
 
   // 관리자(나)에게만 보이는 열. 부모님 화면에서는 아예 안 보이고 서버에서도 안 보냄.
   // 예: 수익·수수료를 부모님께 안 보이게 하려면 ['수익금', '순수익']
-  ADMIN_ONLY_KEYWORDS: [],
+  ADMIN_ONLY_KEYWORDS: ['수익금', '순수익'],
 
   // 주문 카드 맨 위 제목으로 쓸 열
   TITLE_KEYWORDS: ['주문일', '구분', '용량'],
@@ -68,7 +68,8 @@ const CONFIG = {
   SETTLED_VALUES: ['완료', '정산완료', '정산', 'o', 'y', 'v', '✔', '✓', 'true', '예', 'ㅇ', '입금완료'],
   SETTLE_MARK: 'O',        // "정산 완료" 버튼을 누르면 넣을 글자 (체크박스 열이 아닐 때)
   // 월별 합계를 낼 금액 열
-  SUM_KEYWORDS: ['수익금', '인삼대금', '순수익', '금액', '대금', '매출'],
+  // 매출·수수료·순수익 분석은 네이버스토어 정산관리·통계에서 보고, 여기서는 부모님 정산(인삼대금)만 합산
+  SUM_KEYWORDS: ['인삼대금'],
   // 월별 합계를 묶을 날짜 열 (첫 번째로 찾은 열)
   MONTH_KEYWORDS: ['주문일'],
   // 월별 합계에서 건수를 나눠 볼 열 (예: 구분별 몇 건)
@@ -311,7 +312,8 @@ function auth_(token, needEdit) {
 /** 이 사용자가 이 열을 웹앱에서 고칠 수 있는지 */
 function canEditCol_(user, col) {
   if (!col || col.readonly || user.role === 'viewer') return false;
-  if (user.role === 'admin') return true;
+  // 주문 정보·개인정보는 네이버스토어(와 시트)에서 관리 → 웹앱에서는 발송 칸과 정산여부만 고침
+  if (user.role === 'admin') return !!(col.ship || col.settle);
   return !!col.editorEdit && !col.enc && !col.pii;
 }
 
@@ -565,7 +567,8 @@ function columns_(sh) {
   });
 }
 
-const PHONE_RE = /(01[016789]|0\d{1,2})[-\s.]?(\d{3,4})[-\s.]?(\d{4})/g;
+// 앞뒤가 다른 숫자로 이어지면 전화번호가 아님 (주문번호·송장번호 안의 숫자를 가리지 않게)
+const PHONE_RE = /(?<!\d)(01[016789]|0\d{1,2})[-\s.]?(\d{3,4})[-\s.]?(\d{4})(?!\d)/g;
 
 function mask_(value, type) {
   const v = String(value);
@@ -636,7 +639,7 @@ function getData(token, sheetName) {
     sheet: name,
     cols: cols.filter((c, i) => !hide[i]).map(c => Object.assign({}, c, { editable: canEditCol_(user, c) })),
     rows: rows,
-    canAdd: user.role === 'admin',
+    canAdd: false, // 주문은 네이버스토어 → 시트로 들어옴 (웹앱에서 추가하지 않음)
     anonDays: CONFIG.ANON_AFTER_DAYS,
     couriers: recentValues_(cols, rows, 'courier'),
     settleMark: CONFIG.SETTLE_MARK,

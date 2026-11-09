@@ -168,6 +168,26 @@ body.selecting main{padding-bottom:300px}
 .otable td:nth-child(3){text-align:right;white-space:nowrap}
 .otable td.warn{color:#a3261e;font-weight:700}
 .invbox .copyall{display:block;width:100%;margin-top:12px;padding:10px;border-radius:12px;border:1px solid var(--brand);background:var(--card);color:var(--brand);font-weight:700}
+body.parent{font-size:19px}
+.ptabs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+.ptabs button{display:flex;flex-direction:column;align-items:center;gap:2px;border:2px solid var(--line);background:var(--card);border-radius:16px;padding:10px 4px;font-size:1.3rem}
+.ptabs button span{font-size:.95rem;font-weight:700}
+.ptabs button b{font-size:.85rem;color:#a3261e;min-height:1em}
+.ptabs button.on{border-color:var(--brand);background:var(--soft)}
+.ptabs button.on span{color:var(--brand)}
+.pcard{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:16px;margin-bottom:16px}
+.pcard .ptitle{font-size:1.35rem;font-weight:800;line-height:1.3}
+.pcard .pdate{color:var(--sub);font-size:.95rem;margin-top:2px}
+.pcard .pnote{display:inline-block;margin-top:8px;background:#fff3c4;color:#5a4500;border-radius:10px;padding:4px 10px;font-weight:700}
+.pdone{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px 14px;margin-bottom:10px}
+.pdone .l1{font-weight:700}
+.pdone .l2{color:var(--sub);font-size:.92rem;margin-top:2px}
+.pdone .l3{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px}
+.pdone .l3 span{font-variant-numeric:tabular-nums;word-break:break-all}
+.pdone .l3 button{flex:0 0 auto;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:6px 10px;font-size:.9rem}
+.pempty{text-align:center;padding:60px 10px;color:var(--sub);font-size:1.15rem}
+.pempty .big{font-size:3.2rem;margin-bottom:10px}
+.naverbtn{display:block;width:100%;margin-bottom:12px;padding:10px;border-radius:12px;border:1px solid #03c75a;background:var(--card);color:#03a24a;font-weight:700}
 .more{display:block;width:100%;padding:14px;border:1px dashed var(--line);border-radius:14px;background:none;color:var(--sub)}
 .empty-state{text-align:center;color:var(--sub);padding:40px 0}
 
@@ -224,6 +244,11 @@ body.selecting main{padding-bottom:300px}
       <button class="iconbtn" id="refresh" title="새로고침">↻</button>
       <button class="iconbtn" id="lockBtn" title="잠그기">🔒</button>
     </div>
+    <div class="ptabs hidden" id="ptabs">
+      <button data-p="todo">📦<span>보낼 주문</span><b id="pnTodo"></b></button>
+      <button data-p="done">✔<span>보낸 주문</span></button>
+      <button data-p="money">💰<span>정산</span></button>
+    </div>
     <div class="tabs" id="tabs"></div>
     <div class="seg" id="seg"><button data-v="list" class="on">📋 주문</button><button data-v="sum">📊 월별 합계</button></div>
     <div class="tools" id="toolsRow"><input id="q" type="search" placeholder="검색 (상품, 전화 끝 4자리 등)" autocomplete="off"><button class="iconbtn hidden" id="selBtn" title="골라서 비식별 처리">🔒 골라서 비식별</button></div>
@@ -271,7 +296,7 @@ body.selecting main{padding-bottom:300px}
     return os+(model&&!/^K$/.test(model)?' ('+model.trim()+')':'')+' · '+br;
   }
   var waitTicket = null, waitTimer = null;
-  var state = { token:null, data:null, sheet:null, filter:'all', q:'', shown:20, revealed:{}, view:'list', sum:null, selecting:false, picked:{}, drafts:{}, loaded:false };
+  var state = { token:null, data:null, sheet:null, filter:'all', q:'', shown:20, revealed:{}, view:'list', sum:null, selecting:false, picked:{}, drafts:{}, loaded:false, ptab:'todo' };
   var $ = function(id){ return document.getElementById(id); };
 
   function store(k, v){ try{ if(v==null) localStorage.removeItem(k); else localStorage.setItem(k, v); }catch(e){} }
@@ -411,6 +436,17 @@ body.selecting main{padding-bottom:300px}
   function render(){
     var d=state.data;
     $('who').textContent=d.user.name+' · '+d.user.roleName;
+    var parent=d.user.role!=='admin';
+    document.body.classList.toggle('parent', parent);
+    ['seg','toolsRow','filters','tabs'].forEach(function(id){ if(parent) $(id).classList.add('hidden'); });
+    $('ptabs').classList.toggle('hidden', !parent);
+    if (parent){
+      $('who').textContent=d.user.name;
+      $('addBtn').classList.add('hidden'); $('selbar').classList.add('hidden');
+      $('selBtn').classList.add('hidden'); $('adminBtn').classList.add('hidden');
+      renderParent(); return;
+    }
+    $('seg').classList.remove('hidden');
     var tabs=$('tabs'); tabs.innerHTML='';
     if (d.sheets.length>1) d.sheets.forEach(function(n){
       var b=el('button', n===d.sheet?'on':'', n);
@@ -448,8 +484,100 @@ body.selecting main{padding-bottom:300px}
   function won(n){ return Math.round(n).toLocaleString('ko-KR')+'원'; }
   function loadSummary(){
     $('count').textContent='합계를 계산하는 중…'; $('list').innerHTML='';
-    return call('getSummary', state.token, state.sheet).then(function(s){ s._sheet=state.sheet; state.sum=s; if(state.view==='sum') drawSummary(); }).catch(handleErr);
+    return call('getSummary', state.token, state.sheet).then(function(s){ s._sheet=state.sheet; state.sum=s;
+      var parent=state.data && state.data.user.role!=='admin';
+      if ((parent && state.ptab==='money') || (!parent && state.view==='sum')) drawSummary(); }).catch(handleErr);
   }
+  /* ---------- 부모님 화면 (보낼 주문 / 보낸 주문 / 정산) ---------- */
+  function orderDateCol(){ return colWhere(function(c){ return /주문일/.test(c.name); }) || colWhere(function(c){ return c.date && !c.pii; }); }
+  function kDate(v){ var m=String(v||'').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/); return m ? Number(m[2])+'월 '+Number(m[3])+'일' : String(v||''); }
+  function itemTitle(row){
+    return state.data.cols.filter(function(c){ return c.title && !c.date && !c.check; }).map(function(c){ return row.v[c.i]; }).filter(Boolean).join(' · ') || '주문';
+  }
+  function noteCol(){ return colWhere(function(c){ return /비고|요청/.test(c.name) && !c.pii; }); }
+  function renderParent(){
+    var d=state.data, list=$('list'); list.innerHTML='';
+    var todo=d.rows.filter(function(r){ return !isShipped(r); });
+    var done=d.rows.filter(isShipped);
+    $('pnTodo').textContent=todo.length ? todo.length+'건' : '';
+    Array.prototype.forEach.call($('ptabs').children, function(b){ b.classList.toggle('on', b.getAttribute('data-p')===state.ptab); });
+    var oc=orderDateCol(), nc=noteCol();
+    if (state.ptab==='todo'){
+      $('count').textContent=todo.length ? '보낼 주문 '+todo.length+'건 · 오래된 주문부터' : '';
+      if (!todo.length){ var e=el('div','pempty'); e.appendChild(el('div','big','🎉')); e.appendChild(el('div','','보낼 주문이 없어요')); list.appendChild(e); return; }
+      todo.slice().reverse().forEach(function(row){ // 오래된 주문부터
+        var card=el('div','pcard'); card.setAttribute('data-r', row.r);
+        card.appendChild(el('div','ptitle', itemTitle(row)));
+        if (oc && row.v[oc.i]) card.appendChild(el('div','pdate', kDate(row.v[oc.i])+' 주문'));
+        if (nc && row.v[nc.i]) card.appendChild(el('div','pnote','📝 '+row.v[nc.i]));
+        shipCard(card, row);
+        list.appendChild(card);
+      });
+      return;
+    }
+    if (state.ptab==='done'){
+      var inv=shipCol('invoice'), cou=shipCol('courier'), dat=shipCol('date'), f=shipFields();
+      $('count').textContent='최근 보낸 주문';
+      if (!done.length){ var e2=el('div','pempty'); e2.appendChild(el('div','big','📭')); e2.appendChild(el('div','','아직 보낸 주문이 없어요')); list.appendChild(e2); return; }
+      done.slice(0, state.shown).forEach(function(row){
+        var b=el('div','pdone'); b.setAttribute('data-r', row.r);
+        b.appendChild(el('div','l1', (dat&&row.v[dat.i]?kDate(row.v[dat.i])+' 보냄 · ':'')+itemTitle(row)));
+        if (f.name && row.v[f.name.i]) b.appendChild(el('div','l2','받는 분 '+row.v[f.name.i]));
+        var l3=el('div','l3'); l3.appendChild(el('span','', (cou?row.v[cou.i]+' ':'')+(inv?row.v[inv.i]:'')));
+        if (inv && inv.editable){ var fx=el('button','','송장 고치기'); fx.onclick=function(){ fixInvoice(row); }; l3.appendChild(fx); }
+        b.appendChild(l3);
+        list.appendChild(b);
+      });
+      if (done.length>state.shown){ var m=el('button','more','더 보기'); m.onclick=function(){ state.shown+=30; renderParent(); }; list.appendChild(m); }
+      return;
+    }
+    // 💰 정산
+    $('count').textContent='';
+    if (state.sum && state.sum._sheet===state.sheet) drawSummary(); else loadSummary();
+  }
+  function fixInvoice(row){
+    var d=state.data, inv=shipCol('invoice'), cou=shipCol('courier'), ci, ii;
+    openModal('송장 고치기 · '+itemTitle(row), function(sh){
+      if (cou){ sh.appendChild(el('label','',cou.name)); ci=el('input'); ci.type='text'; ci.value=row.v[cou.i]; sh.appendChild(ci); }
+      sh.appendChild(el('label','',inv.name)); ii=el('input'); ii.type='text'; ii.inputMode='numeric'; ii.value=row.v[inv.i]; sh.appendChild(ii);
+    }, function(){
+      var jobs=[];
+      var num=String(ii.value).replace(/[\s-]/g,'');
+      if (!num){ toast('송장번호를 넣어 주세요'); return Promise.reject(new Error('empty')); }
+      if (num!==String(row.v[inv.i])) jobs.push(function(){ return call('updateCell', state.token, d.sheet, row.r, inv.i, row.v[inv.i], num); });
+      if (cou && ci.value.trim()!==String(row.v[cou.i])) jobs.push(function(){ return call('updateCell', state.token, d.sheet, row.r, cou.i, row.v[cou.i], ci.value.trim()); });
+      return jobs.reduce(function(p,j){ return p.then(j); }, Promise.resolve()).then(function(){ toast('고쳤어요'); return refresh(); }).catch(function(e){ handleErr(e); throw e; });
+    });
+  }
+
+  /* ---------- 네이버 일괄발송용 복사 (관리자) ---------- */
+  function naverDialog(){
+    var d=state.data, inv=shipCol('invoice'), cou=shipCol('courier'), dat=shipCol('date');
+    var no=colWhere(function(c){ return /주문번호/.test(c.name); });
+    if (!inv || !no){ toast('주문번호·송장번호 열이 필요해요'); return; }
+    var days=1, pre;
+    var pick=function(){
+      var since=new Date(); since.setHours(0,0,0,0); since=since.getTime()-(days-1)*86400000;
+      return d.rows.filter(function(r){ var t=dat?parseD(r.v[dat.i]):null; return String(r.v[inv.i]).trim() && (!dat || (t && t.getTime()>=since)); });
+    };
+    var text=function(rows){ return ['주문번호\t택배사\t송장번호'].concat(rows.map(function(r){ return [r.v[no.i], cou?r.v[cou.i]:'', r.v[inv.i]].join('\t'); })).join('\n'); };
+    openModal('📋 네이버 일괄발송용 복사', function(sh){
+      sh.appendChild(el('p','hint','부모님이 입력한 송장번호를 네이버 스마트스토어 → 발송처리 → 엑셀 일괄발송 양식에 붙여 넣을 수 있게 복사해요. (주문번호 · 택배사 · 송장번호, 탭으로 구분)'));
+      var chips=el('div','quick');
+      [[1,'오늘 보낸 것'],[3,'최근 3일'],[7,'최근 7일']].forEach(function(x){
+        var b=el('button','',x[1]); b.type='button'; b.onclick=function(){ days=x[0]; upd(); Array.prototype.forEach.call(chips.children,function(y){ y.style.outline=y===b?'2px solid #03c75a':''; }); }; chips.appendChild(b);
+      });
+      sh.appendChild(chips);
+      pre=el('textarea'); pre.readOnly=true; pre.style.minHeight='160px'; pre.style.fontFamily='monospace'; pre.style.fontSize='.85rem'; sh.appendChild(pre);
+      var upd=function(){ var rows=pick(); pre.value=rows.length?text(rows):'(해당 기간에 보낸 주문이 없어요)'; };
+      upd(); chips.children[0].style.outline='2px solid #03c75a';
+    }, function(){
+      var rows=pick(); if(!rows.length){ toast('복사할 주문이 없어요'); return Promise.reject(new Error('none')); }
+      copy(text(rows)); return Promise.resolve();
+    });
+    var sv=document.querySelector('.sheet .primary'); if (sv) sv.textContent='복사하기';
+  }
+
   function drawSummary(){
     var s=state.sum, list=$('list'); list.innerHTML='';
     $('count').textContent=s.monthName+' 기준 · 시트 전체 · 개인정보 없음';
@@ -577,17 +705,6 @@ body.selecting main{padding-bottom:300px}
       dd.appendChild(cp);
     } else {
       if (val==='') dd.appendChild(el('span','empty','—')); else dd.appendChild(document.createTextNode(val));
-      if (row.m.indexOf(c.i)>=0 && state.data.user.role==='admin'){ // 개인정보 확인은 관리자만
-        var rb=el('button','reveal','보기');
-        rb.onclick=function(ev){
-          ev.stopPropagation();
-          call('reveal', state.token, state.data.sheet, row.r, c.i).then(function(v){
-            state.revealed[key]=v; drawList();
-            setTimeout(function(){ if(state.revealed[key]!=null){ delete state.revealed[key]; drawList(); } }, 60000);
-          }).catch(handleErr);
-        };
-        dd.appendChild(rb);
-      }
     }
     if (c.editable){ dd.className='edit'; dd.onclick=function(){ editCell(row, c); }; }
     dl.appendChild(dt); dl.appendChild(dd);
@@ -596,6 +713,11 @@ body.selecting main{padding-bottom:300px}
   function focusRow(r){
     var i=state.data.rows.findIndex(function(x){ return x.r===r; });
     if (i<0){ toast('그 주문을 찾지 못했어요'); return; }
+    if (state.data.user.role!=='admin'){
+      state.ptab=isShipped(state.data.rows[i])?'done':'todo'; state.shown=Math.max(state.shown, i+1); renderParent();
+      var pc=document.querySelector('[data-r="'+r+'"]'); if (pc){ pc.classList.add('focus'); pc.scrollIntoView({block:'start'}); }
+      return;
+    }
     state.shown=Math.max(state.shown, i+1); drawList();
     var c=document.querySelector('[data-r="'+r+'"]');
     if (c){ c.classList.add('focus'); c.scrollIntoView({block:'start'}); }
@@ -689,6 +811,9 @@ body.selecting main{padding-bottom:300px}
 
   function drawList(){
     var d=state.data, list=$('list'); list.innerHTML='';
+    if (d.user.role==='admin' && !state.selecting && shipCol('invoice')){
+      var nb=el('button','naverbtn','📋 네이버 일괄발송용 송장 복사'); nb.onclick=naverDialog; list.appendChild(nb);
+    }
     var rows=d.rows.filter(matches);
     $('count').textContent=rows.length+'건'+(d.truncated?' (최근 '+d.rows.length+'행만 불러옴)':'');
     if (!rows.length){ list.appendChild(el('div','empty-state', d.rows.length?'조건에 맞는 주문이 없어요':'아직 주문이 없어요')); return; }
@@ -1054,6 +1179,9 @@ body.selecting main{padding-bottom:300px}
   $('lockBtn').onclick=function(){ var t=state.token; toLogin('잠갔어요'); if(t) call('logout', t).catch(function(){}); };
   $('addBtn').onclick=addNew;
   $('adminBtn').onclick=openAdmin;
+  Array.prototype.forEach.call($('ptabs').children, function(b){
+    b.onclick=function(){ state.ptab=b.getAttribute('data-p'); state.shown=20; window.scrollTo(0,0); renderParent(); };
+  });
   // 5분마다 새로 불러오기 (다른 분이 고친 것 반영 + 접속 시간이 끝나면 잠금)
   setInterval(function(){
     var typing=document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
