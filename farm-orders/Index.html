@@ -121,6 +121,22 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
 .dev .b .ok{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}
 .dev .b .no{color:#b3261e}
 .urlbox{word-break:break-all;background:var(--chip);border-radius:10px;padding:8px;font-size:.8rem}
+.shipbox{background:var(--soft);border-radius:14px;padding:12px;margin:4px 0 10px}
+.shipbox .lbl{font-size:.82rem;color:var(--sub);margin-top:6px}
+.shipbox .val{display:flex;align-items:flex-start;gap:8px;font-size:1.12rem;font-weight:600;word-break:break-all}
+.shipbox .val span{flex:1}
+.shipbox .val button,.shipbox .val a{flex:0 0 auto;border:1px solid var(--line);background:var(--card);border-radius:10px;padding:4px 10px;font-size:.85rem;font-weight:600;color:var(--ink);text-decoration:none}
+.shipbox .copyall{display:block;width:100%;margin-top:10px;padding:10px;border-radius:12px;border:1px solid var(--brand);background:var(--card);color:var(--brand);font-weight:700}
+.shipform{border:2px solid var(--brand);border-radius:14px;padding:12px;margin:6px 0 4px}
+.shipform h4{margin:0 0 6px;font-size:1rem}
+.shipform label{display:block;font-size:.85rem;color:var(--sub);margin:8px 0 4px}
+.shipform input{width:100%;border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--bg);font-size:1.15rem}
+.shipform .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.shipform .chips button{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 12px;font-size:.92rem}
+.shipform .chips button.on{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}
+.shipform .go{display:block;width:100%;margin-top:12px;padding:15px;border:none;border-radius:14px;background:var(--brand);color:var(--brand-ink);font-size:1.12rem;font-weight:800}
+.linkcopy{border:1px dashed var(--line);background:none;border-radius:10px;padding:6px 10px;font-size:.85rem;color:var(--sub)}
+.card.focus{outline:3px solid #e0a100}
 .more{display:block;width:100%;padding:14px;border:1px dashed var(--line);border-radius:14px;background:none;color:var(--sub)}
 .empty-state{text-align:center;color:var(--sub);padding:40px 0}
 
@@ -203,6 +219,8 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
 (function(){
   'use strict';
   var KEY = 'farmOrders.token', DKEY = 'farmOrders.device';
+  var FOCUS = '<?= focusRow ?>';
+  var COURIERS = ['CJ대한통운','우체국택배','한진택배','롯데택배','로젠택배'];
   var memDevice = null;
   function deviceId(){
     var d = load(DKEY);
@@ -221,7 +239,7 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
     return os+(model&&!/^K$/.test(model)?' ('+model.trim()+')':'')+' · '+br;
   }
   var waitTicket = null, waitTimer = null;
-  var state = { token:null, data:null, sheet:null, filter:'all', q:'', shown:20, revealed:{}, view:'list', sum:null, selecting:false, picked:{} };
+  var state = { token:null, data:null, sheet:null, filter:'all', q:'', shown:20, revealed:{}, view:'list', sum:null, selecting:false, picked:{}, drafts:{}, loaded:false };
   var $ = function(id){ return document.getElementById(id); };
 
   function store(k, v){ try{ if(v==null) localStorage.removeItem(k); else localStorage.setItem(k, v); }catch(e){} }
@@ -326,7 +344,13 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
     if (!state.token) return;
     return call('getData', state.token, state.sheet).then(function(d){
       state.data=d; state.sheet=d.sheet; state.revealed={};
+      if (!state.loaded){
+        state.loaded=true;
+        if (FOCUS){ state.filter='all'; }
+        else if (hasShip() && d.rows.some(function(r){ return !isShipped(r); })) state.filter='todo'; // 처음엔 보낼 주문부터
+      }
       render();
+      if (FOCUS){ var fr=FOCUS; FOCUS=''; focusRow(Number(fr)); }
       if (state.view==='sum') loadSummary();
     }).catch(handleErr);
   }
@@ -483,6 +507,100 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
     dl.appendChild(dt); dl.appendChild(dd);
   }
 
+  function focusRow(r){
+    var i=state.data.rows.findIndex(function(x){ return x.r===r; });
+    if (i<0){ toast('그 주문을 찾지 못했어요'); return; }
+    state.shown=Math.max(state.shown, i+1); drawList();
+    var c=document.querySelector('[data-r="'+r+'"]');
+    if (c){ c.classList.add('focus'); c.scrollIntoView({block:'start'}); }
+  }
+  function colWhere(fn){ return state.data.cols.filter(fn)[0]; }
+  function shipFields(){
+    var cols=state.data.cols;
+    var name=colWhere(function(c){ return c.pii==='name' && /수취인|받는/.test(c.name); }) || colWhere(function(c){ return c.pii==='name'; });
+    return {
+      name: name,
+      phone: colWhere(function(c){ return c.pii==='phone'; }),
+      addr: colWhere(function(c){ return c.pii==='address'; }),
+      zip: colWhere(function(c){ return /우편/.test(c.name); }),
+      memo: colWhere(function(c){ return /메모|요청/.test(c.name); })
+    };
+  }
+  function shipText(row){
+    var f=shipFields(), t=titleCols().map(function(i){ return row.v[i]; }).filter(Boolean);
+    var L=[];
+    if (f.name && row.v[f.name.i]) L.push('받는 분: '+row.v[f.name.i]);
+    if (f.phone && row.v[f.phone.i]) L.push('연락처: '+row.v[f.phone.i]);
+    if (f.addr && row.v[f.addr.i]) L.push('주소: '+(f.zip&&row.v[f.zip.i]?'('+row.v[f.zip.i]+') ':'')+row.v[f.addr.i]);
+    if (f.memo && row.v[f.memo.i]) L.push('배송메모: '+row.v[f.memo.i]);
+    if (t.length) L.push('상품: '+t.join(' '));
+    return L.join('\n');
+  }
+  // 발송 전 주문: 받는 분 정보 + 바로 입력하는 발송 칸
+  function shipCard(card, row){
+    var d=state.data, f=shipFields(), canEdit=d.user.role!=='viewer';
+    var box=el('div','shipbox');
+    var line=function(label, val, extra){
+      if (!val) return;
+      box.appendChild(el('div','lbl',label));
+      var v=el('div','val'); v.appendChild(el('span','',val));
+      if (extra) extra(v);
+      var cp=el('button','','복사'); cp.onclick=function(){ copy(val); }; v.appendChild(cp);
+      box.appendChild(v);
+    };
+    line('받는 분', f.name && row.v[f.name.i]);
+    line('연락처', f.phone && row.v[f.phone.i], function(v){ var a=el('a','','📞 전화'); a.href='tel:'+String(row.v[f.phone.i]).replace(/[^\d+]/g,''); v.appendChild(a); });
+    line('주소', f.addr && ((f.zip&&row.v[f.zip.i]?'('+row.v[f.zip.i]+') ':'')+row.v[f.addr.i]));
+    line('배송메모', f.memo && row.v[f.memo.i]);
+    var all=el('button','copyall','📋 택배 정보 전체 복사'); all.onclick=function(){ copy(shipText(row)); };
+    box.appendChild(all);
+    card.appendChild(box);
+
+    var inv=shipCol('invoice'), cou=shipCol('courier'), dat=shipCol('date');
+    if (!canEdit || !inv || inv.readonly) return [f.name,f.phone,f.addr,f.zip,f.memo];
+    var dr=state.drafts[row.r] || (state.drafts[row.r]={ courier:(cou&&row.v[cou.i])||d.couriers[0]||'', invoice:'', date:today() });
+    var fm=el('div','shipform');
+    fm.appendChild(el('h4','','🚚 보낸 뒤 입력해 주세요'));
+    var ci;
+    if (cou){
+      fm.appendChild(el('label','',cou.name));
+      ci=el('input'); ci.type='text'; ci.value=dr.courier; ci.oninput=function(){ dr.courier=ci.value; markChips(); };
+      fm.appendChild(ci);
+      var chips=el('div','chips'), list=[];
+      d.couriers.concat(COURIERS).forEach(function(x){ if(x && list.indexOf(x)<0) list.push(x); });
+      var markChips=function(){ Array.prototype.forEach.call(chips.children, function(b){ b.classList.toggle('on', b.textContent===ci.value); }); };
+      list.slice(0,7).forEach(function(x){ var b=el('button','',x); b.type='button'; b.onclick=function(){ ci.value=x; dr.courier=x; markChips(); }; chips.appendChild(b); });
+      fm.appendChild(chips); markChips();
+    }
+    fm.appendChild(el('label','',inv.name));
+    var ii=el('input'); ii.type='text'; ii.inputMode='numeric'; ii.placeholder='송장번호 숫자'; ii.value=dr.invoice;
+    ii.oninput=function(){ dr.invoice=ii.value; };
+    fm.appendChild(ii);
+    var di;
+    if (dat){
+      fm.appendChild(el('label','',dat.name));
+      di=el('input'); di.type='date'; di.value=dr.date; di.onchange=function(){ dr.date=di.value; };
+      fm.appendChild(di);
+    }
+    var go=el('button','go','✔ 발송 완료 저장');
+    go.onclick=function(){
+      var num=String(ii.value).replace(/[\s-]/g,'');
+      if (!num){ toast('송장번호를 넣어 주세요'); ii.focus(); return; }
+      if (cou && !String(ci.value).trim()){ toast('택배사를 골라 주세요'); return; }
+      if (!confirm((ci?ci.value+' ':'')+num+'\n이 송장번호로 발송 완료 저장할까요?')) return;
+      go.disabled=true;
+      call('markShipped', state.token, d.sheet, row.r, ci?ci.value.trim():'', num, di?di.value:'').then(function(){
+        delete state.drafts[row.r];
+        var left=d.rows.filter(function(r){ return r.r!==row.r && !isShipped(r); }).length;
+        toast('발송 완료 저장했어요 ✔'+(left?' · 남은 주문 '+left+'건':' · 모두 보냈어요!'));
+        state.sum=null; return refresh();
+      }).catch(function(e){ go.disabled=false; handleErr(e); });
+    };
+    fm.appendChild(go);
+    card.appendChild(fm);
+    return [f.name,f.phone,f.addr,f.zip,f.memo];
+  }
+
   function drawList(){
     var d=state.data, list=$('list'); list.innerHTML='';
     var rows=d.rows.filter(matches);
@@ -492,6 +610,7 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
     var sc=settleCol(), inv=shipCol('invoice'), cou=shipCol('courier'), dat=shipCol('date');
     rows.slice(0, state.shown).forEach(function(row){
       var card=el('div','card'+(isDone(row)?' done':'')+(state.picked[row.r]?' sel':''));
+      card.setAttribute('data-r', row.r);
       if (state.selecting){
         var pk=el('label','pick'), cb=el('input'); cb.type='checkbox'; cb.checked=!!state.picked[row.r];
         cb.onchange=function(){ if(cb.checked) state.picked[row.r]=1; else delete state.picked[row.r]; card.classList.toggle('sel', cb.checked); selInfo(); };
@@ -511,7 +630,8 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
           st.appendChild(el('span','badge ok',txt));
         } else {
           st.appendChild(el('span','badge todo','📦 발송 전'));
-          if (canEdit && inv && !inv.readonly){
+          if (d.url){ var lk=el('button','linkcopy','🔗 이 주문 링크'); lk.onclick=function(){ copy('[주문] '+titleCols().map(function(i){ return row.v[i]; }).filter(Boolean).join(' ')+' 발송 부탁드려요\n'+d.url+'?r='+row.r); }; st.appendChild(lk); }
+          if (canEdit && inv && !inv.readonly && !row.open){
             var sb=el('button','shipbtn','발송 처리');
             sb.onclick=function(){ shipDialog(row); };
             st.appendChild(sb);
@@ -547,9 +667,12 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
         card.appendChild(box);
       }
 
+      var inBox=[];
+      if (row.open && hasShip() && !isShipped(row)) inBox=shipCard(card, row).filter(Boolean).map(function(c){ return c.i; });
       var main=el('dl'), more=el('dl','detail'), moreCount=0;
       d.cols.forEach(function(c){
         if (c.check || c.settle || c.title || (c.empty && row.v[c.i]==='')) return;
+        if (inBox.indexOf(c.i)>=0) { fieldRow(more,row,c,canEdit); moreCount++; return; } // 위 상자에 크게 보임 → 고칠 땐 자세히에서
         if (c.ship && isShipped(row)) { /* 상태 줄에 이미 보임 → 자세히로 */ fieldRow(more,row,c,canEdit); moreCount++; return; }
         if (c.ship && !isShipped(row)) return; // 발송 전엔 발송 처리 버튼으로
         if (c.detail) { fieldRow(more,row,c,canEdit); moreCount++; return; }
@@ -789,7 +912,9 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
   $('adminBtn').onclick=openAdmin;
   // 5분마다 새로 불러오기 (다른 분이 고친 것 반영 + 접속 시간이 끝나면 잠금)
   setInterval(function(){
-    if (state.token && !document.hidden && !$('modal').innerHTML && !state.selecting) refresh();
+    var typing=document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+    var drafting=Object.keys(state.drafts).some(function(k){ return state.drafts[k].invoice; });
+    if (state.token && !document.hidden && !$('modal').innerHTML && !state.selecting && !typing && !drafting) refresh();
   }, 5*60000);
   $('waitCheck').onclick=function(){ checkWait(false); };
   $('waitCancel').onclick=function(){ stopWait(); toLogin(''); };
