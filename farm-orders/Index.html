@@ -97,6 +97,30 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
 .card.sel{outline:3px solid #b3261e}
 .pick{display:flex;align-items:center;gap:8px;margin:-2px 0 8px;font-weight:600;color:#b3261e}
 .pick input{width:24px;height:24px}
+#waitDev{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 16px;text-align:center}
+.wait .big{font-size:3rem}
+.wait h1{font-size:1.3rem;margin:8px 0}
+.wait p{color:var(--sub)}
+.linkbtn{display:block;margin:16px auto 0;border:none;background:none;color:var(--sub);text-decoration:underline}
+.adm h3{margin:18px 0 8px;font-size:1.05rem}
+.adm .sw{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.adm .sw input[type=checkbox]{width:24px;height:24px}
+.adm .times{display:flex;gap:8px;align-items:center;margin:8px 0}
+.adm .times input{flex:1;min-width:0;border:1px solid var(--line);border-radius:12px;padding:10px;background:var(--bg)}
+.adm .days{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+.adm .days button{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--card);font-weight:700}
+.adm .days button.on{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}
+.hint{color:var(--sub);font-size:.85rem;margin:4px 0}
+.adm select,.adm input[type=email]{width:100%;border:1px solid var(--line);border-radius:12px;padding:10px;background:var(--bg)}
+.dev{border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin:8px 0}
+.dev.pending{border:2px solid #e0a100;background:rgba(224,161,0,.08)}
+.dev .t{font-weight:700}
+.dev .s{color:var(--sub);font-size:.85rem}
+.dev .b{display:flex;gap:6px;margin-top:8px}
+.dev .b button{flex:1;padding:8px;border-radius:10px;border:1px solid var(--line);background:var(--card);font-weight:600}
+.dev .b .ok{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}
+.dev .b .no{color:#b3261e}
+.urlbox{word-break:break-all;background:var(--chip);border-radius:10px;padding:8px;font-size:.8rem}
 .more{display:block;width:100%;padding:14px;border:1px dashed var(--line);border-radius:14px;background:none;color:var(--sub)}
 .empty-state{text-align:center;color:var(--sub);padding:40px 0}
 
@@ -132,12 +156,24 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
   <div class="err" id="loginErr"></div>
 </section>
 
+<!-- 새 기기 승인 대기 -->
+<section id="waitDev" class="hidden">
+  <div class="wait">
+    <div class="big">📱</div>
+    <h1>승인을 기다리고 있어요</h1>
+    <p id="waitMsg">처음 쓰는 휴대폰이라 관리자 승인이 필요해요.<br>관리자에게 알림이 갔어요. 승인되면 자동으로 열려요.</p>
+    <button class="shipbtn" id="waitCheck">승인됐는지 확인</button>
+    <button class="linkbtn" id="waitCancel">처음으로</button>
+  </div>
+</section>
+
 <!-- 앱 -->
 <section id="app" class="hidden">
   <header>
     <div class="top">
       <h1>🌱 <?= appTitle ?></h1>
       <span class="who" id="who"></span>
+      <button class="iconbtn hidden" id="adminBtn" title="설정">⚙️</button>
       <button class="iconbtn" id="refresh" title="새로고침">↻</button>
       <button class="iconbtn" id="lockBtn" title="잠그기">🔒</button>
     </div>
@@ -166,7 +202,25 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
 <script>
 (function(){
   'use strict';
-  var KEY = 'farmOrders.token';
+  var KEY = 'farmOrders.token', DKEY = 'farmOrders.device';
+  var memDevice = null;
+  function deviceId(){
+    var d = load(DKEY);
+    if (!d){
+      var a = new Uint8Array(16); (window.crypto||window.msCrypto).getRandomValues(a);
+      d = Array.prototype.map.call(a, function(b){ return ('0'+b.toString(16)).slice(-2); }).join('');
+      store(DKEY, d);
+      if (load(DKEY)!==d){ memDevice = memDevice || d; d = memDevice; } // 저장이 안 되는 브라우저
+    }
+    return d;
+  }
+  function deviceLabel(){
+    var u = navigator.userAgent, os = /iPhone/.test(u)?'iPhone':/iPad/.test(u)?'iPad':/Android/.test(u)?'Android':/Windows/.test(u)?'Windows PC':/Mac/.test(u)?'Mac':'기기';
+    var br = /SamsungBrowser/.test(u)?'삼성 인터넷':/NAVER/.test(u)?'네이버앱':/KAKAOTALK/.test(u)?'카카오톡':/CriOS|Chrome/.test(u)?'Chrome':/Safari/.test(u)?'Safari':'브라우저';
+    var model = (u.match(/Android [\d.]+; ([^;)]+)/)||[])[1];
+    return os+(model&&!/^K$/.test(model)?' ('+model.trim()+')':'')+' · '+br;
+  }
+  var waitTicket = null, waitTimer = null;
   var state = { token:null, data:null, sheet:null, filter:'all', q:'', shown:20, revealed:{}, view:'list', sum:null, selecting:false, picked:{} };
   var $ = function(id){ return document.getElementById(id); };
 
@@ -192,7 +246,7 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
   }
   function handleErr(e){
     var m = msgOf(e);
-    if (/^AUTH:/.test(m)) { toLogin(m.replace(/^AUTH:\s*/,'')); return; }
+    if (/^(AUTH|HOURS|BLOCKED):/.test(m)) { toLogin(m.replace(/^[A-Z]+:\s*/,'')); return; }
     if (/^CONFLICT:/.test(m)) { toast(m.replace(/^CONFLICT:\s*/,'')); refresh(); return; }
     toast(m.replace(/^[A-Z]+:\s*/,''));
   }
@@ -230,14 +284,37 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
     if (pin.length<4) { $('loginErr').textContent='PIN 을 끝까지 눌러 주세요.'; return; }
     var p=pin; pin=''; drawDots();
     var remember=$('remember').checked;
-    call('login', p, remember).then(function(r){
-      state.token=r.token;
-      if (remember) store(KEY, r.token); else store(KEY, null);
-      $('login').classList.add('hidden'); $('app').classList.remove('hidden');
-      refresh();
+    call('login', p, remember, deviceId(), deviceLabel()).then(function(r){
+      if (r.pending){ startWait(r.ticket, remember); return; }
+      loggedIn(r, remember);
     }).catch(function(e){ $('loginErr').textContent=msgOf(e).replace(/^[A-Z]+:\s*/,''); });
   }
+  function loggedIn(r, remember){
+    stopWait();
+    state.token=r.token;
+    if (remember) store(KEY, r.token); else store(KEY, null);
+    $('login').classList.add('hidden'); $('waitDev').classList.add('hidden'); $('app').classList.remove('hidden');
+    refresh();
+  }
+  function startWait(ticket, remember){
+    waitTicket={t:ticket, remember:remember};
+    $('login').classList.add('hidden'); $('waitDev').classList.remove('hidden');
+    stopWait(true);
+    waitTimer=setInterval(function(){ if(!document.hidden) checkWait(true); }, 15000);
+  }
+  function stopWait(keepTicket){ if(waitTimer){ clearInterval(waitTimer); waitTimer=null; } if(!keepTicket) waitTicket=null; }
+  function checkWait(silent){
+    if (!waitTicket) return;
+    var w=waitTicket;
+    call('checkDevice', w.t, deviceId()).then(function(r){
+      if (r.pending){ if(!silent) toast('아직 승인 전이에요'); return; }
+      loggedIn(r, w.remember);
+    }).catch(function(e){
+      stopWait(); $('waitDev').classList.add('hidden'); toLogin(msgOf(e).replace(/^[A-Z]+:\s*/,''));
+    });
+  }
   function toLogin(msg){
+    stopWait(); $('waitDev').classList.add('hidden');
     state.token=null; state.data=null; state.revealed={}; store(KEY,null);
     $('list').innerHTML=''; $('modal').innerHTML='';
     $('app').classList.add('hidden'); $('login').classList.remove('hidden');
@@ -306,6 +383,7 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
     $('toolsRow').classList.toggle('hidden', sum);
     f.classList.toggle('hidden', sum || opts.length<=1);
     $('selBtn').classList.toggle('hidden', d.user.role!=='admin');
+    $('adminBtn').classList.toggle('hidden', d.user.role!=='admin');
     $('addBtn').classList.toggle('hidden', sum || state.selecting || d.user.role==='viewer');
     $('selbar').classList.toggle('hidden', sum || !state.selecting);
     if (sum) { if (state.sum) drawSummary(); } else drawList();
@@ -561,6 +639,7 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
     var start=masked ? state.revealed[key] : row.v[c.i];
     var ta;
     openModal(c.name+' 고치기', function(sh){
+      if (c.date && !c.pii) sh.appendChild(el('p','hint','11/5, 11.5, 1105, 오늘·어제 처럼 써도 날짜로 바꿔서 넣어요.'));
       ta=el('textarea'); ta.value=start; sh.appendChild(ta);
     }, function(){
       return call('updateCell', state.token, state.data.sheet, row.r, c.i, row.v[c.i], ta.value).then(function(v){
@@ -583,7 +662,7 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
         }
         sh.appendChild(el('label','',c.name));
         var inp=el('input'); inp.type='text';
-        if (c.date){ var t=new Date(); inp.value=t.getFullYear()+'-'+('0'+(t.getMonth()+1)).slice(-2)+'-'+('0'+t.getDate()).slice(-2); }
+        if (c.date){ inp.value=today(); inp.placeholder='11/5 처럼 써도 돼요'; }
         if (c.pii==='phone') inp.inputMode='tel';
         sh.appendChild(inp); inputs[c.i]=inp;
       });
@@ -618,6 +697,81 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
     }).catch(handleErr);
   }
 
+  /* ---------- ⚙️ 관리자 설정 ---------- */
+  var DAYN=['일','월','화','수','목','금','토'];
+  function fmtTime(ms){ if(!ms) return '-'; var d=new Date(ms); return (d.getMonth()+1)+'/'+d.getDate()+' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); }
+  function openAdmin(){
+    call('getAdmin', state.token).then(drawAdmin).catch(handleErr);
+  }
+  function drawAdmin(a){
+    var st=JSON.parse(JSON.stringify(a.settings)), H=st.hours, N=st.notify;
+    var bg=el('div','sheet-bg'), sh=el('div','sheet adm');
+    sh.appendChild(el('h2','','⚙️ 설정'));
+    var sw=function(label, obj, key, hint){
+      var r=el('label','sw'); var t=el('span','',label); r.appendChild(t);
+      var cb=el('input'); cb.type='checkbox'; cb.checked=!!obj[key]; cb.onchange=function(){ obj[key]=cb.checked; }; r.appendChild(cb);
+      sh.appendChild(r); if(hint) sh.appendChild(el('div','hint',hint)); return cb;
+    };
+
+    // 기기 관리
+    sh.appendChild(el('h3','','📱 기기 관리'+(a.deviceApproval?'':' (승인제 꺼짐)')));
+    if (!a.devices.length) sh.appendChild(el('div','hint','등록된 기기가 없어요.'));
+    a.devices.forEach(function(d){
+      var box=el('div','dev'+(d.status==='pending'?' pending':''));
+      box.appendChild(el('div','t',d.name+' · '+d.label));
+      box.appendChild(el('div','s',{pending:'⏳ 승인 대기',approved:'✅ 승인됨',blocked:'⛔ 차단'}[d.status]+' · 요청 '+fmtTime(d.at)+(d.last?' · 마지막 접속 '+fmtTime(d.last):'')));
+      var b=el('div','b');
+      var act=function(label, cls, action, ask){ var x=el('button',cls,label); x.onclick=function(){ if(ask && !confirm(ask)) return; call('setDevice', state.token, d.key, action).then(function(r){ close(); drawAdmin(r); toast(label+' 완료'); }).catch(handleErr); }; b.appendChild(x); };
+      if (d.status!=='approved') act('승인','ok','approve');
+      if (d.status!=='blocked') act('차단','no','block', d.name+' · '+d.label+'\n이 기기를 차단할까요? 바로 로그아웃돼요.');
+      act('삭제','','delete','목록에서 지울까요? 다시 들어오려면 승인이 필요해요.');
+      box.appendChild(b); sh.appendChild(box);
+    });
+
+    // 접속 가능 시간
+    sh.appendChild(el('h3','','🕐 접속 가능 시간'));
+    sw('접속 시간 제한 사용', H, 'on', '켜면 아래 요일·시간에만 부모님이 들어올 수 있어요. 시간이 지나면 쓰던 화면도 잠겨요. (기준: '+a.tz+')');
+    var tm=el('div','times');
+    var s1=el('input'); s1.type='time'; s1.value=H.start; s1.onchange=function(){ H.start=s1.value; };
+    var s2=el('input'); s2.type='time'; s2.value=H.end; s2.onchange=function(){ H.end=s2.value; };
+    tm.appendChild(s1); tm.appendChild(el('span','','~')); tm.appendChild(s2); sh.appendChild(tm);
+    sh.appendChild(el('div','hint','끝 시간이 시작보다 이르면 밤을 넘겨 다음 날까지로 봐요 (예: 22:00~02:00).'));
+    var dy=el('div','days');
+    DAYN.forEach(function(n,i){ var b=el('button',H.days.indexOf(i)>=0?'on':'',n); b.type='button';
+      b.onclick=function(){ var k=H.days.indexOf(i); if(k>=0) H.days.splice(k,1); else H.days.push(i); b.classList.toggle('on', k<0); }; dy.appendChild(b); });
+    sh.appendChild(dy);
+    sw('관리자(나)에게도 적용', H, 'admin', '끄면 나는 언제든 들어올 수 있어요 (권장: 끔 — 켜면 시간 밖에서는 이 설정도 못 바꿔요).');
+
+    // 알림
+    sh.appendChild(el('h3','','🔔 알림 메일'));
+    sh.appendChild(el('div','hint','받는 주소 (비우면 '+a.ownerEmail+')'));
+    var em=el('input'); em.type='email'; em.value=N.email; em.placeholder=a.ownerEmail; em.onchange=function(){ N.email=em.value.trim(); }; sh.appendChild(em);
+    sw('새 기기 승인 요청 즉시 알림', N, 'device');
+    sw('PIN 연속 실패로 잠겼을 때 즉시 알림', N, 'lock');
+    sw('부모님이 개인정보를 볼 때마다 즉시 알림', N, 'revealNow', '메일이 많이 올 수 있어요. 보통은 하루 요약으로 충분해요.');
+    sw('하루 접속 요약 메일', N, 'daily', '지난 24시간 로그인·개인정보 보기·수정·실패 기록을 모아서 보내요 (기록이 없으면 안 보냄).');
+    var hs=el('select'); for (var h=0; h<24; h++){ var o=el('option','',h+'시쯤'); o.value=h; if(h===N.dailyHour) o.selected=true; hs.appendChild(o); }
+    hs.onchange=function(){ N.dailyHour=Number(hs.value); }; sh.appendChild(hs);
+
+    // 웹앱 주소
+    sh.appendChild(el('h3','','🔗 웹앱 주소'));
+    sh.appendChild(el('div','urlbox', a.url||'(배포 후 표시)'));
+    sh.appendChild(el('div','hint','주소가 다른 사람에게 퍼진 것 같으면: 시트 메뉴 🔐 주문관리 → "웹앱 주소 바꾸기" (모든 로그인·기기 초기화 + 새 주소 만드는 법 안내)'));
+
+    var btns=el('div','row-btns');
+    var cancel=el('button','','닫기'), save=el('button','primary','설정 저장');
+    cancel.onclick=close;
+    save.onclick=function(){
+      if (H.on && !H.days.length){ toast('요일을 하나 이상 골라 주세요'); return; }
+      save.disabled=true;
+      call('saveSettings', state.token, st).then(function(){ toast('저장했어요'); close(); }).catch(function(e){ save.disabled=false; handleErr(e); });
+    };
+    btns.appendChild(cancel); btns.appendChild(save); sh.appendChild(btns);
+    bg.appendChild(sh); bg.onclick=function(e){ if(e.target===bg) close(); };
+    $('modal').innerHTML=''; $('modal').appendChild(bg);
+    function close(){ $('modal').innerHTML=''; }
+  }
+
   /* ---------- 시작 ---------- */
   buildPad(); drawDots();
   $('refresh').onclick=function(){ state.sum=null; refresh(); };
@@ -632,6 +786,13 @@ dl.detail{margin-top:6px;padding-top:8px;border-top:1px dashed var(--line)}
   });
   $('lockBtn').onclick=function(){ var t=state.token; toLogin('잠갔어요'); if(t) call('logout', t).catch(function(){}); };
   $('addBtn').onclick=addNew;
+  $('adminBtn').onclick=openAdmin;
+  // 5분마다 새로 불러오기 (다른 분이 고친 것 반영 + 접속 시간이 끝나면 잠금)
+  setInterval(function(){
+    if (state.token && !document.hidden && !$('modal').innerHTML && !state.selecting) refresh();
+  }, 5*60000);
+  $('waitCheck').onclick=function(){ checkWait(false); };
+  $('waitCancel').onclick=function(){ stopWait(); toLogin(''); };
   $('selBtn').onclick=function(){ setSelecting(!state.selecting); };
   $('selCancel').onclick=function(){ setSelecting(false); };
   $('selAll').onclick=function(){

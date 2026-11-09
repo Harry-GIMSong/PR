@@ -60,6 +60,15 @@ const CONFIG = {
 
   SESSION_HOURS: 12,       // "이 기기 기억" 안 할 때 로그인 유지 시간
   REMEMBER_DAYS: 30,       // "이 기기 기억" 할 때 로그인 유지 일수
+
+  // 새 기기 승인제: 처음 보는 휴대폰은 PIN 이 맞아도 관리자가 승인해야 들어옴
+  DEVICE_APPROVAL: true,
+  DEVICE_PENDING_HOURS: 24, // 승인 대기 요청이 이 시간 지나면 버림
+
+  // 날짜 열에 "11/5" 처럼 넣으면 진짜 날짜로 바꿔서 이 형식으로 보이게 함.
+  // 비워 두면 그 열에 이미 있는 날짜들의 형식을 그대로 따름(없으면 yyyy-mm-dd).
+  DATE_FORMAT: '',
+  DATE_FALLBACK_FORMAT: 'yyyy-mm-dd',
   MAX_FAILS: 5,            // PIN 이 이만큼 연속으로 틀리면
   LOCK_MINUTES: 15,        // 이 시간 동안 로그인 잠금
 
@@ -134,9 +143,11 @@ function safeEqual_(a, b) {
   return r === 0;
 }
 
-/** 웹앱: PIN 으로 로그인. 성공하면 토큰을 돌려줌. */
-function login(pin, remember) {
+/** 웹앱: PIN 으로 로그인. 성공하면 토큰, 새 기기면 승인 대기 티켓을 돌려줌. */
+function login(pin, remember, deviceId, deviceLabel) {
   pin = String(pin || '').trim();
+  deviceId = String(deviceId || '').slice(0, 80);
+  deviceLabel = String(deviceLabel || '알 수 없는 기기').slice(0, 80);
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
@@ -155,22 +166,81 @@ function login(pin, remember) {
       if (fails.n >= CONFIG.MAX_FAILS) {
         fails.until = now + CONFIG.LOCK_MINUTES * 60000;
         fails.n = 0;
-        log_('-', '로그인 잠김', CONFIG.MAX_FAILS + '회 연속 실패');
-        notifyOwner_('PIN 이 ' + CONFIG.MAX_FAILS + '회 연속 틀려서 주문 관리 웹앱 로그인이 ' + CONFIG.LOCK_MINUTES + '분 잠겼습니다.');
+        log_('-', '로그인 잠김', CONFIG.MAX_FAILS + '회 연속 실패 · ' + deviceLabel);
+        notify_('lock', 'PIN 이 ' + CONFIG.MAX_FAILS + '회 연속 틀려서 로그인이 ' + CONFIG.LOCK_MINUTES + '분 잠겼습니다.\n기기: ' + deviceLabel);
       }
       props().setProperty('FAILS', JSON.stringify(fails));
-      log_('-', '로그인 실패', '');
+      log_('-', '로그인 실패', deviceLabel);
       const left = CONFIG.MAX_FAILS - fails.n;
       throw new Error('PIN: PIN 이 맞지 않아요.' + (fails.until > now ? ' ' + CONFIG.LOCK_MINUTES + '분 동안 잠겼어요.' : ' (남은 기회 ' + left + '번)'));
     }
     props().setProperty('FAILS', '{"n":0,"until":0}');
+    checkHours_(user);
     cleanTokens_();
 
-    const token = randomToken_();
-    const exp = now + (remember ? CONFIG.REMEMBER_DAYS * 86400000 : CONFIG.SESSION_HOURS * 3600000);
-    props().setProperty('T_' + sha_(token), JSON.stringify({ u: user.id, exp: exp }));
-    log_(user.name, '로그인', remember ? '기기 기억 ' + CONFIG.REMEMBER_DAYS + '일' : CONFIG.SESSION_HOURS + '시간');
-    return { token: token, name: user.name, role: user.role, roleName: ROLES[user.role], exp: exp };
+    // 새 기기 승인제
+    let dkey = '';
+    if (CONFIG.DEVICE_APPROVAL) {
+      if (!/^[a-zA-Z0-9]{16,80}$/.test(deviceId)) throw new Error('이 브라우저에서는 기기 확인이 안 돼요. 다른 브라우저(크롬·사파리)로 열어 주세요.');
+      dkey = deviceKey_(user.id, deviceId);
+      const devices = getDevices_();
+      const dev = devices[dkey];
+      if (dev && dev.status === 'blocked') {
+        log_(user.name, '차단된 기기 접속 시도', deviceLabel);
+        throw new Error('BLOCKED: 이 휴대폰은 접속이 막혀 있어요. 관리자에게 문의해 주세요.');
+      }
+      if (!dev || dev.status !== 'approved') {
+        const ticket = randomToken_();
+        devices[dkey] = { u: user.id, name: user.name, label: deviceLabel, status: 'pending', at: now, ticket: sha_(ticket), remember: !!remember };
+        saveDevices_(devices);
+        if (!dev) {
+          log_(user.name, '새 기기 승인 요청', deviceLabel);
+          notify_('device', user.name + ' 님이 새 기기에서 로그인을 시도했어요. 승인해야 들어올 수 있습니다.\n\n기기: ' + deviceLabel +
+            '\n\n승인: 웹앱(관리자) → ⚙️ 설정 → 기기 관리, 또는 시트 메뉴 🔐 주문관리 → 기기 승인·관리\n모르는 기기면 "차단" 하고 그 분의 PIN 을 바꾸세요.');
+        }
+        return { pending: true, ticket: ticket, name: user.name };
+      }
+      dev.last = now; dev.label = deviceLabel;
+      saveDevices_(devices);
+    }
+    return issueToken_(user, remember, dkey, deviceLabel);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function issueToken_(user, remember, dkey, label) {
+  const token = randomToken_();
+  const exp = Date.now() + (remember ? CONFIG.REMEMBER_DAYS * 86400000 : CONFIG.SESSION_HOURS * 3600000);
+  props().setProperty('T_' + sha_(token), JSON.stringify({ u: user.id, exp: exp, d: dkey }));
+  log_(user.name, '로그인', (remember ? '기기 기억 ' + CONFIG.REMEMBER_DAYS + '일' : CONFIG.SESSION_HOURS + '시간') + ' · ' + (label || ''));
+  return { token: token, name: user.name, role: user.role, roleName: ROLES[user.role], exp: exp };
+}
+
+/** 웹앱: 승인 대기 중인 기기가 승인됐는지 확인. 승인됐으면 토큰을 돌려줌 */
+function checkDevice(ticket, deviceId) {
+  if (!ticket || !deviceId) throw new Error('AUTH: PIN 을 다시 넣어 주세요.');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const devices = getDevices_();
+    const th = sha_(String(ticket));
+    const dkey = Object.keys(devices).find(k => devices[k].ticket === th);
+    if (!dkey) throw new Error('AUTH: 승인 요청이 끝났어요. PIN 을 다시 넣어 주세요.');
+    const dev = devices[dkey];
+    if (dkey !== deviceKey_(dev.u, String(deviceId))) throw new Error('AUTH: PIN 을 다시 넣어 주세요.');
+    if (dev.status === 'blocked') { delete dev.ticket; saveDevices_(devices); throw new Error('BLOCKED: 이 휴대폰은 승인되지 않았어요.'); }
+    if (dev.status !== 'approved') {
+      if (Date.now() - dev.at > CONFIG.DEVICE_PENDING_HOURS * 3600000) throw new Error('AUTH: 승인 요청 시간이 지났어요. PIN 을 다시 넣어 주세요.');
+      return { pending: true };
+    }
+    const user = getUsers_().find(u => u.id === dev.u);
+    if (!user) throw new Error('AUTH: PIN 을 다시 넣어 주세요.');
+    checkHours_(user);
+    const remember = dev.remember;
+    delete dev.ticket; delete dev.remember; dev.last = Date.now();
+    saveDevices_(devices);
+    return issueToken_(user, remember, dkey, dev.label);
   } finally {
     lock.releaseLock();
   }
@@ -199,8 +269,183 @@ function auth_(token, needEdit) {
   }
   const user = getUsers_().find(u => u.id === t.u);
   if (!user) throw new Error('AUTH: 사용자 정보가 바뀌었어요. PIN 을 다시 넣어 주세요.');
+  if (CONFIG.DEVICE_APPROVAL) {
+    const dev = t.d && getDevices_()[t.d];
+    if (!dev || dev.status !== 'approved') {
+      props().deleteProperty('T_' + sha_(String(token)));
+      throw new Error('AUTH: 이 휴대폰의 승인이 취소됐어요.');
+    }
+  }
+  checkHours_(user);
   if (needEdit && user.role === 'viewer') throw new Error('보기만 가능한 사용자예요.');
   return user;
+}
+
+/* ------------------------------------------------------------------ */
+/* 기기 승인 · 접속 시간 · 알림 설정                                    */
+/* ------------------------------------------------------------------ */
+
+function deviceKey_(userId, deviceId) { return sha_(userId + ':' + deviceId).slice(0, 24); }
+function getDevices_() {
+  const d = JSON.parse(props().getProperty('DEVICES') || '{}');
+  const now = Date.now();
+  Object.keys(d).forEach(k => { // 오래된 승인 대기 요청 정리
+    if (d[k].status === 'pending' && now - d[k].at > CONFIG.DEVICE_PENDING_HOURS * 3600000) delete d[k];
+  });
+  return d;
+}
+function saveDevices_(d) { props().setProperty('DEVICES', JSON.stringify(d)); }
+
+const DEFAULT_SETTINGS = {
+  hours: { on: false, start: '07:00', end: '22:00', days: [0, 1, 2, 3, 4, 5, 6], admin: false },
+  notify: { email: '', device: true, lock: true, revealNow: false, daily: true, dailyHour: 21 },
+};
+function getSettings_() {
+  const s = JSON.parse(props().getProperty('SETTINGS') || '{}');
+  return {
+    hours: Object.assign({}, DEFAULT_SETTINGS.hours, s.hours || {}),
+    notify: Object.assign({}, DEFAULT_SETTINGS.notify, s.notify || {}),
+  };
+}
+
+function hhmm_(s) { const m = String(s || '').match(/^(\d{1,2}):(\d{2})$/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; }
+
+/** 접속 가능 시간이 아니면 막음 (관리자는 설정에 따라 예외) */
+function checkHours_(user) {
+  const h = getSettings_().hours;
+  if (!h.on) return;
+  if (user.role === 'admin' && !h.admin) return;
+  const tz = ss_().getSpreadsheetTimeZone();
+  const now = new Date();
+  const day = Number(Utilities.formatDate(now, tz, 'u')) % 7; // 0=일 … 6=토
+  const min = Number(Utilities.formatDate(now, tz, 'H')) * 60 + Number(Utilities.formatDate(now, tz, 'm'));
+  const st = hhmm_(h.start), en = hhmm_(h.end);
+  let ok = h.days.indexOf(day) >= 0;
+  if (ok && st != null && en != null && st !== en) ok = st < en ? (min >= st && min < en) : (min >= st || min < en);
+  if (!ok) {
+    const names = ['일', '월', '화', '수', '목', '금', '토'];
+    const days = h.days.length === 7 ? '매일' : h.days.slice().sort().map(d => names[d]).join('·');
+    throw new Error('HOURS: 지금은 접속할 수 없는 시간이에요. (접속 가능: ' + days + ' ' + h.start + '~' + h.end + ')');
+  }
+}
+
+function requireAdmin_(token) {
+  const user = auth_(token);
+  if (user.role !== 'admin') throw new Error('관리자만 할 수 있어요.');
+  return user;
+}
+
+/** 웹앱(관리자): 설정 + 기기 목록 */
+function getAdmin(token) {
+  requireAdmin_(token);
+  const devices = getDevices_();
+  const list = Object.keys(devices).map(k => {
+    const d = devices[k];
+    return { key: k, name: d.name, label: d.label, status: d.status, at: d.at, last: d.last || 0 };
+  }).sort((a, b) => (a.status === 'pending' ? -1 : 0) - (b.status === 'pending' ? -1 : 0) || (b.last || b.at) - (a.last || a.at));
+  const st = getSettings_();
+  return {
+    settings: st,
+    ownerEmail: Session.getEffectiveUser().getEmail(),
+    devices: list,
+    deviceApproval: CONFIG.DEVICE_APPROVAL,
+    url: ScriptApp.getService().getUrl(),
+    tz: ss_().getSpreadsheetTimeZone(),
+  };
+}
+
+/** 웹앱(관리자): 기기 승인 / 차단 / 삭제 */
+function setDevice(token, key, action) {
+  const admin = requireAdmin_(token);
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const devices = getDevices_();
+    const d = devices[key];
+    if (!d) throw new Error('이미 없는 기기예요.');
+    if (action === 'approve') d.status = 'approved';
+    else if (action === 'block') { d.status = 'blocked'; revokeDeviceTokens_(key); }
+    else if (action === 'delete') { delete devices[key]; revokeDeviceTokens_(key); }
+    else throw new Error('잘못된 요청이에요.');
+    saveDevices_(devices);
+    log_(admin.name, { approve: '기기 승인', block: '기기 차단', delete: '기기 삭제' }[action], d.name + ' · ' + d.label);
+    return getAdmin(token);
+  } finally {
+    lock.releaseLock();
+  }
+}
+function revokeDeviceTokens_(dkey) {
+  const all = props().getProperties();
+  Object.keys(all).forEach(k => {
+    if (k.indexOf('T_') === 0) { try { if (JSON.parse(all[k]).d === dkey) props().deleteProperty(k); } catch (e) { /* 무시 */ } }
+  });
+}
+
+/** 웹앱(관리자): 접속 시간 · 알림 설정 저장 */
+function saveSettings(token, s) {
+  const admin = requireAdmin_(token);
+  const h = s && s.hours || {}, n = s && s.notify || {};
+  const clean = {
+    hours: {
+      on: !!h.on,
+      start: hhmm_(h.start) != null ? h.start : '07:00',
+      end: hhmm_(h.end) != null ? h.end : '22:00',
+      days: (Array.isArray(h.days) ? h.days : []).map(Number).filter(d => d >= 0 && d <= 6),
+      admin: !!h.admin,
+    },
+    notify: {
+      email: /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(n.email || '').trim()) ? String(n.email).trim() : '',
+      device: !!n.device, lock: !!n.lock, revealNow: !!n.revealNow, daily: !!n.daily,
+      dailyHour: Math.min(23, Math.max(0, Number(n.dailyHour) || 21)),
+    },
+  };
+  if (clean.hours.on && !clean.hours.days.length) throw new Error('접속 가능한 요일을 하나 이상 골라 주세요.');
+  props().setProperty('SETTINGS', JSON.stringify(clean));
+  setupDailyTrigger_(clean.notify);
+  log_(admin.name, '설정 변경', '접속시간 ' + (clean.hours.on ? clean.hours.start + '~' + clean.hours.end : '제한 없음') + ' · 하루요약 ' + (clean.notify.daily ? clean.notify.dailyHour + '시' : '끔'));
+  return getAdmin(token);
+}
+
+function setupDailyTrigger_(n) {
+  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'dailyReport').forEach(t => ScriptApp.deleteTrigger(t));
+  if (n.daily) ScriptApp.newTrigger('dailyReport').timeBased().everyDays(1).atHour(n.dailyHour).create();
+}
+
+/** 알림 메일. kind: device | lock | reveal */
+function notify_(kind, msg) {
+  try {
+    const n = getSettings_().notify;
+    if ((kind === 'device' && !n.device) || (kind === 'lock' && !n.lock) || (kind === 'reveal' && !n.revealNow)) return;
+    const to = n.email || Session.getEffectiveUser().getEmail();
+    const title = { device: '새 기기 승인 요청', lock: '로그인 잠김', reveal: '개인정보 보기' }[kind] || '알림';
+    if (to) MailApp.sendEmail(to, '[' + CONFIG.APP_TITLE + '] ' + title, msg + '\n\n시트: ' + ss_().getUrl());
+  } catch (e) { /* 메일 실패는 무시 */ }
+}
+function notifyOwner_(msg) { notify_('lock', msg); }
+
+/** 매일: 지난 24시간 접속 요약 메일 */
+function dailyReport() {
+  const n = getSettings_().notify;
+  if (!n.daily) return;
+  const sh = ss_().getSheetByName(CONFIG.LOG_SHEET);
+  if (!sh || sh.getLastRow() < 2) return;
+  const since = Date.now() - 86400000;
+  const start = Math.max(2, sh.getLastRow() - 1500);
+  const rows = sh.getRange(start, 1, sh.getLastRow() - start + 1, 4).getValues()
+    .filter(r => r[0] instanceof Date && r[0].getTime() >= since);
+  if (!rows.length) return;
+  const count = {};
+  rows.forEach(r => { const k = r[2]; count[k] = (count[k] || 0) + 1; });
+  const tz = ss_().getSpreadsheetTimeZone();
+  const important = rows.filter(r => /실패|잠김|새 기기|차단|비식별|기기|설정|사용자/.test(r[2]));
+  const reveals = rows.filter(r => r[2] === '개인정보 보기');
+  const byWho = {};
+  reveals.forEach(r => { byWho[r[1]] = (byWho[r[1]] || 0) + 1; });
+  let body = '지난 24시간 접속 요약\n\n' + Object.keys(count).map(k => '· ' + k + ': ' + count[k] + '건').join('\n');
+  if (reveals.length) body += '\n\n개인정보 보기: ' + Object.keys(byWho).map(k => k + ' ' + byWho[k] + '건').join(', ');
+  if (important.length) body += '\n\n눈여겨볼 기록\n' + important.slice(-30).map(r => Utilities.formatDate(r[0], tz, 'MM-dd HH:mm') + ' ' + r[1] + ' ' + r[2] + ' ' + r[3]).join('\n');
+  const to = n.email || Session.getEffectiveUser().getEmail();
+  if (to) MailApp.sendEmail(to, '[' + CONFIG.APP_TITLE + '] 하루 접속 요약 (' + rows.length + '건)', body + '\n\n시트: ' + ss_().getUrl());
 }
 
 function cleanTokens_() {
@@ -370,7 +615,115 @@ function reveal(token, sheetName, row, colIdx) {
   if (user.role !== 'admin' && CONFIG.ADMIN_ONLY_KEYWORDS.length && has_(header, CONFIG.ADMIN_ONLY_KEYWORDS)) throw new Error('볼 수 없는 칸이에요.');
   const value = sh.getRange(row, colIdx + 1).getDisplayValue();
   log_(user.name, '개인정보 보기', sheetName + ' ' + row + '행 [' + header + ']');
+  if (user.role !== 'admin') notify_('reveal', user.name + ' 님이 개인정보를 봤어요: ' + sheetName + ' ' + row + '행 [' + header + ']');
   return value;
+}
+
+/* ------------------------------------------------------------------ */
+/* 날짜 자동 변환 ("11/5" → 2026-11-05)                                  */
+/* ------------------------------------------------------------------ */
+
+/** 여러 모양의 날짜 글자를 Date 로. 연도가 없으면 올해(미래로 2달 넘게 가면 작년). 못 알아보면 null */
+function parseLooseDate_(v, today) {
+  if (v instanceof Date && !isNaN(v)) return v;
+  let s = String(v == null ? '' : v).trim();
+  if (!s) return null;
+  today = today || new Date();
+  const base = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  if (s === '오늘') return base;
+  if (s === '어제') return new Date(base.getTime() - 86400000);
+  if (s === '그제' || s === '그저께') return new Date(base.getTime() - 2 * 86400000);
+  s = s.replace(/\s*\(.\)\s*/g, ' ').replace(/\s+\d{1,2}:\d{2}(:\d{2})?.*$/, ''); // 요일 "(수)"·시각 떼기
+  let y = null, m, d, g;
+  if ((g = s.match(/^(\d{4})\s*[-./년]\s*(\d{1,2})\s*[-./월]\s*(\d{1,2})\s*일?\.?$/))) { y = +g[1]; m = +g[2]; d = +g[3]; }
+  else if ((g = s.match(/^(\d{4})(\d{2})(\d{2})$/))) { y = +g[1]; m = +g[2]; d = +g[3]; }
+  else if ((g = s.match(/^(\d{2})\s*[-./]\s*(\d{1,2})\s*[-./]\s*(\d{1,2})\.?$/))) { y = 2000 + +g[1]; m = +g[2]; d = +g[3]; }
+  else if ((g = s.match(/^(\d{1,2})\s*[-./월]\s*(\d{1,2})\s*일?\.?$/))) { m = +g[1]; d = +g[2]; }
+  else if ((g = s.match(/^(\d{2})(\d{2})$/))) { m = +g[1]; d = +g[2]; }
+  else return null;
+  if (!(m >= 1 && m <= 12 && d >= 1 && d <= 31)) return null;
+  let out = new Date(y || base.getFullYear(), m - 1, d);
+  if (out.getMonth() !== m - 1) return null; // 2/31 같은 날짜
+  if (!y && out.getTime() - base.getTime() > 60 * 86400000) out = new Date(base.getFullYear() - 1, m - 1, d);
+  return out;
+}
+
+/** 그 열의 날짜 형식: CONFIG.DATE_FORMAT → 열에 이미 있는 날짜들의 가장 흔한 형식 → 기본값 */
+function dateFormatFor_(sh, colIdx) {
+  if (CONFIG.DATE_FORMAT) return CONFIG.DATE_FORMAT;
+  const last = sh.getLastRow();
+  const first = Math.max(CONFIG.HEADER_ROW + 1, last - 80);
+  if (last >= first) {
+    const rng = sh.getRange(first, colIdx + 1, last - first + 1, 1);
+    const vals = rng.getValues(), fmts = rng.getNumberFormats();
+    const count = {};
+    vals.forEach((r, i) => {
+      const f = fmts[i][0];
+      if (r[0] instanceof Date && f && !/^(General|@|0|#)/i.test(f)) count[f] = (count[f] || 0) + 1;
+    });
+    const best = Object.keys(count).sort((a, b) => count[b] - count[a])[0];
+    if (best) return best;
+  }
+  return CONFIG.DATE_FALLBACK_FORMAT;
+}
+
+function isDateCol_(c) { return c && c.date && !c.pii && !c.check; }
+
+/** 시트에서 직접 입력할 때도 날짜 열이면 자동 변환 (붙여넣기 포함) */
+function onEdit(e) {
+  try {
+    const rng = e && e.range;
+    if (!rng) return;
+    const sh = rng.getSheet();
+    if (allowedSheets_().indexOf(sh.getName()) < 0) return;
+    const r0 = Math.max(rng.getRow(), CONFIG.HEADER_ROW + 1);
+    const r1 = rng.getLastRow();
+    if (r1 < r0 || r1 - r0 > 2000) return;
+    const cols = columns_(sh);
+    for (let c = rng.getColumn(); c <= rng.getLastColumn(); c++) {
+      const col = cols[c - 1];
+      if (!isDateCol_(col)) continue;
+      normalizeDateRange_(sh, col, r0, r1);
+    }
+  } catch (err) { /* 입력을 막지 않도록 무시 */ }
+}
+
+/** r0~r1 행의 날짜 칸을 진짜 날짜 + 같은 형식으로 맞춤. 바꾼 칸 수를 돌려줌 */
+function normalizeDateRange_(sh, col, r0, r1) {
+  const rng = sh.getRange(r0, col.i + 1, r1 - r0 + 1, 1);
+  const vals = rng.getValues(), forms = rng.getFormulas(), fmts = rng.getNumberFormats();
+  const fmt = dateFormatFor_(sh, col.i);
+  const outV = vals.map(r => [r[0]]), outF = fmts.map(r => [r[0]]);
+  const hit = [];
+  vals.forEach((r, i) => {
+    if (forms[i][0] || r[0] === '' || r[0] == null) return;
+    const d = parseLooseDate_(r[0]);
+    if (!d) return;
+    if (!(r[0] instanceof Date) || fmts[i][0] !== fmt) { outV[i][0] = d; outF[i][0] = fmt; hit.push(i); }
+  });
+  if (!hit.length) return 0;
+  if (forms.some(f => f[0]) || hit.length <= 3) {
+    hit.forEach(i => { const c = sh.getRange(r0 + i, col.i + 1); c.setNumberFormat(fmt); c.setValue(outV[i][0]); });
+  } else {
+    rng.setNumberFormats(outF);
+    rng.setValues(outV);
+  }
+  const changed = hit.length;
+  return changed;
+}
+
+/** 시트 메뉴: 날짜 열 전체를 한 번에 정리 */
+function menuNormalizeDates() {
+  const ui = SpreadsheetApp.getUi();
+  let total = 0;
+  allowedSheets_().forEach(name => {
+    const sh = ss_().getSheetByName(name);
+    const last = sh.getLastRow();
+    if (last <= CONFIG.HEADER_ROW) return;
+    columns_(sh).filter(isDateCol_).forEach(col => { total += normalizeDateRange_(sh, col, CONFIG.HEADER_ROW + 1, last); });
+  });
+  log_('시트 주인', '날짜 형식 정리', total + '칸');
+  ui.alert('날짜 ' + total + '칸을 정리했어요.\n(알아볼 수 없는 글자는 그대로 두었어요)');
 }
 
 /* ------------------------------------------------------------------ */
@@ -412,7 +765,14 @@ function updateCell(token, sheetName, row, colIdx, oldValue, newValue) {
     const curDisp = cell.getDisplayValue();
     const curShown = CONFIG.MASK_PII ? mask_(curDisp, col.pii) : curDisp;
     if (curShown !== String(oldValue)) throw new Error('CONFLICT: 그사이 다른 분이 바꿨어요. 새로 불러올게요.');
-    cell.setValue(cleanInput_(newValue));
+    if (isDateCol_(col) && String(newValue).trim()) {
+      const d = parseLooseDate_(String(newValue).trim());
+      if (!d) throw new Error('날짜를 알아볼 수 없어요. 11/5 또는 2026-11-05 처럼 넣어 주세요.');
+      cell.setNumberFormat(dateFormatFor_(sh, col.i));
+      cell.setValue(d);
+    } else {
+      cell.setValue(cleanInput_(newValue));
+    }
     SpreadsheetApp.flush();
     log_(user.name, '수정', sheetName + ' ' + row + '행 [' + col.name + ']' + (col.pii ? '' : ' "' + String(curDisp).slice(0, 40) + '" → "' + String(newValue).slice(0, 40) + '"'));
     const d = cell.getDisplayValue();
@@ -445,8 +805,14 @@ function addRow(token, sheetName, values) {
       if (c.readonly || (c.adminOnly && user.role !== 'admin')) return '';
       const v = values ? values[c.i] : '';
       if (c.check) return v === true;
+      if (isDateCol_(c) && String(v || '').trim()) {
+        const d = parseLooseDate_(String(v).trim());
+        if (!d) throw new Error('[' + c.name + '] 날짜를 알아볼 수 없어요. 11/5 처럼 넣어 주세요.');
+        return d;
+      }
       return cleanInput_(v);
     });
+    cols.forEach(c => { if (isDateCol_(c) && out[c.i] instanceof Date) sh.getRange(row, c.i + 1).setNumberFormat(dateFormatFor_(sh, c.i)); });
     sh.getRange(row, 1, 1, cols.length).setValues([out]);
     log_(user.name, '새 행 추가', sheetName + ' ' + row + '행');
     return row;
@@ -552,12 +918,7 @@ function markShipped(token, sheetName, row, courier, invoice, dateStr) {
       const m = String(dateStr || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
       const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date();
       const cell = sh.getRange(row, dat.i + 1);
-      // 같은 열 위쪽 칸의 날짜 모양(예: 2026-11-05, 11/5)을 그대로 따름
-      for (let r = row - 1; r > CONFIG.HEADER_ROW; r--) {
-        const above = sh.getRange(r, dat.i + 1);
-        if (above.getValue() instanceof Date) { cell.setNumberFormat(above.getNumberFormat()); break; }
-        if (row - r > 30) break;
-      }
+      cell.setNumberFormat(dateFormatFor_(sh, dat.i)); // 그 열의 날짜 형식을 따름
       cell.setValue(d);
     }
     log_(user.name, '발송 처리', sheetName + ' ' + row + '행 ' + (courier || '') + ' ' + invoice);
@@ -586,13 +947,6 @@ function log_(who, action, detail) {
   } catch (e) { /* 기록 실패는 무시 */ }
 }
 
-function notifyOwner_(msg) {
-  try {
-    const owner = Session.getEffectiveUser().getEmail();
-    if (owner) MailApp.sendEmail(owner, '[' + CONFIG.APP_TITLE + '] 보안 알림', msg + '\n\n시트: ' + ss_().getUrl());
-  } catch (e) { /* 메일 실패는 무시 */ }
-}
-
 /* ------------------------------------------------------------------ */
 /* 시트 메뉴 (시트 주인만 사용)                                         */
 /* ------------------------------------------------------------------ */
@@ -603,8 +957,11 @@ function onOpen() {
     .addItem('사용자 목록 · 삭제', 'menuUsers')
     .addItem('모든 기기 로그아웃', 'menuRevokeAll')
     .addSeparator()
+    .addItem('기기 승인 · 관리', 'menuDevices')
     .addItem('접속기록 보기', 'menuShowLog')
     .addItem('로그인 잠금 풀기', 'menuUnlock')
+    .addItem('웹앱 주소 바꾸기 (주소가 샜을 때)', 'menuRotateUrl')
+    .addItem('날짜 칸 형식 한 번에 정리', 'menuNormalizeDates')
     .addSeparator()
     .addItem('비식별: 정산 O + ' + CONFIG.ANON_AFTER_DAYS + '일 지난 주문 (지금)', 'menuAnonymizeNow')
     .addItem('비식별: 정산 O 주문 전체 (기간 무시)', 'menuAnonymizeSettledAll')
@@ -676,6 +1033,42 @@ function menuShowLog() {
   SpreadsheetApp.getUi().alert('다 본 뒤에는 시트 탭을 오른쪽 클릭 → "시트 숨기기" 해 두세요.');
 }
 
+function menuDevices() {
+  const ui = SpreadsheetApp.getUi();
+  const devices = getDevices_();
+  const keys = Object.keys(devices).sort((a, b) => (devices[a].status === 'pending' ? -1 : 1) - (devices[b].status === 'pending' ? -1 : 1));
+  if (!keys.length) { ui.alert('등록된 기기가 없어요.'); return; }
+  const label = { pending: '⏳ 승인 대기', approved: '✅ 승인됨', blocked: '⛔ 차단' };
+  const list = keys.map((k, i) => (i + 1) + '. ' + devices[k].name + ' · ' + devices[k].label + ' — ' + label[devices[k].status]).join('\n');
+  const r = ui.prompt('기기 승인 · 관리', list + '\n\n"번호 동작" 으로 입력하세요. 동작: 승인 / 차단 / 삭제\n예) 1 승인', ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  const m = r.getResponseText().trim().match(/^(\d+)\s*(승인|차단|삭제)$/);
+  if (!m || !keys[Number(m[1]) - 1]) { ui.alert('예) 1 승인  처럼 입력해 주세요.'); return; }
+  const key = keys[Number(m[1]) - 1], d = devices[key];
+  const act = { 승인: 'approve', 차단: 'block', 삭제: 'delete' }[m[2]];
+  if (act === 'approve') d.status = 'approved';
+  else if (act === 'block') { d.status = 'blocked'; revokeDeviceTokens_(key); }
+  else { delete devices[key]; revokeDeviceTokens_(key); }
+  saveDevices_(devices);
+  log_('시트 주인', '기기 ' + m[2], d.name + ' · ' + d.label);
+  ui.alert(d.name + ' 님의 기기를 ' + m[2] + '했어요.');
+}
+
+function menuRotateUrl() {
+  const ui = SpreadsheetApp.getUi();
+  const ok = ui.alert('웹앱 주소 바꾸기',
+    '웹앱 주소가 다른 사람에게 퍼진 것 같을 때 씁니다. 구글 정책상 주소 자체는 Apps Script 화면에서 직접 바꿔야 해요.\n\n' +
+    '지금 "예" 를 누르면:\n · 모든 기기 로그아웃\n · 승인된 기기 목록 초기화 (새 주소로 들어올 때 다시 승인)\n\n' +
+    '그다음 직접 할 일:\n 1) 확장 프로그램 → Apps Script → 배포 → 새 배포 (웹 앱 · 실행: 나 · 액세스: 모든 사용자) → 새 주소 복사\n' +
+    ' 2) 배포 → 배포 관리 → 예전 배포 선택 → 보관(🗄) → 예전 주소는 더 이상 안 열림\n' +
+    ' 3) 부모님 휴대폰에서 새 주소 열고 홈 화면에 다시 추가\n\n진행할까요?', ui.ButtonSet.YES_NO);
+  if (ok !== ui.Button.YES) return;
+  revokeTokens_(null);
+  saveDevices_({});
+  log_('시트 주인', '웹앱 주소 교체 시작', '모든 로그인·기기 초기화');
+  ui.alert('로그아웃·기기 초기화를 했어요. 이제 Apps Script 에서 1)~3) 을 해 주세요.');
+}
+
 function menuUnlock() {
   props().setProperty('FAILS', '{"n":0,"until":0}');
   SpreadsheetApp.getUi().alert('로그인 잠금을 풀었어요.');
@@ -718,6 +1111,7 @@ function anonymizeRows(token, sheetName, rows) {
 
 function parseDate_(v) {
   if (v instanceof Date && !isNaN(v)) return v;
+  if (!/20\d{2}/.test(String(v))) return null; // 연도 없는 글자는 기간 계산에서 건너뜀 (메뉴 "날짜 칸 정리" 로 고치세요)
   const m = String(v || '').match(/(20\d{2})\s*[-./년]\s*(\d{1,2})\s*[-./월]\s*(\d{1,2})/);
   return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
 }
