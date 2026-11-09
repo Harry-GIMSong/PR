@@ -20,6 +20,9 @@ const CONFIG = {
 
   // 개인정보 열 자동 인식 (머리글에 이 단어가 들어가면 가려서 보여줌)
   MASK_PII: true,
+  // 아직 발송 전인 주문은 택배 보내는 데 필요하므로 편집 권한(부모님)·관리자에게 가리지 않고 보여줌.
+  // 발송(송장번호 또는 발송일 입력)이 끝나면 다시 가려서 보여줌. false 면 언제나 가림("보기" 로 풀기).
+  SHOW_PII_UNSHIPPED: true,
   PII_KEYWORDS: {
     phone:   ['전화', '연락처', '휴대폰', '핸드폰', '폰번호', 'phone', 'tel', 'mobile'],
     address: ['주소', '배송지', 'address'],
@@ -97,9 +100,12 @@ const props = () => PropertiesService.getScriptProperties();
 /* 웹앱 진입점                                                          */
 /* ------------------------------------------------------------------ */
 
-function doGet() {
+function doGet(e) {
   const t = HtmlService.createTemplateFromFile('Index');
   t.appTitle = CONFIG.APP_TITLE;
+  // ?r=12 처럼 열면 12행 주문을 바로 보여줌 (주문 하나만 콕 집어 보내는 링크)
+  const r = e && e.parameter && String(e.parameter.r || '');
+  t.focusRow = /^\d{1,6}$/.test(r) ? r : '';
   return t.evaluate()
     .setTitle(CONFIG.APP_TITLE)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1')
@@ -573,6 +579,9 @@ function getData(token, sheetName) {
   const sh = ss_().getSheetByName(name);
   const cols = columns_(sh);
   const hide = cols.map(c => c.adminOnly && user.role !== 'admin');
+  const inv = cols.find(c => c.ship === 'invoice'), dat = cols.find(c => c.ship === 'date');
+  const openPii = CONFIG.SHOW_PII_UNSHIPPED && user.role !== 'viewer' && !!(inv || dat);
+  const opened = [];
   const lastRow = sh.getLastRow();
   const first = CONFIG.HEADER_ROW + 1;
   let rows = [];
@@ -583,20 +592,23 @@ function getData(token, sheetName) {
     const raw = sh.getRange(start, 1, n, cols.length).getValues();
     for (let r = 0; r < n; r++) {
       if (disp[r].every(x => x === '')) continue;
+      const unshipped = openPii && !((inv && String(disp[r][inv.i]).trim()) || (dat && String(disp[r][dat.i]).trim()));
+      if (unshipped) opened.push(start + r);
       const v = [], m = [];
       for (let c = 0; c < cols.length; c++) {
         const col = cols[c];
         if (hide[c]) { v.push(''); continue; }
         if (col.check) { v.push(raw[r][c] === true); continue; }
         const d = col.enc ? decrypt_(disp[r][c]) : disp[r][c];
-        const masked = CONFIG.MASK_PII ? mask_(d, col.pii) : d;
+        const masked = CONFIG.MASK_PII && !unshipped ? mask_(d, col.pii) : d;
         if (masked !== d) m.push(c);
         v.push(masked);
       }
-      rows.push({ r: start + r, v: v, m: m });
+      rows.push({ r: start + r, v: v, m: m, open: unshipped });
     }
     if (CONFIG.NEWEST_FIRST) rows.reverse();
   }
+  logOpened_(user, name, opened);
   return {
     user: { name: user.name, role: user.role, roleName: ROLES[user.role] },
     sheets: names,
@@ -608,7 +620,19 @@ function getData(token, sheetName) {
     settledValues: CONFIG.SETTLED_VALUES,
     truncated: lastRow - CONFIG.HEADER_ROW > CONFIG.MAX_ROWS,
     at: Date.now(),
+    url: user.role === 'admin' ? ScriptApp.getService().getUrl() : '',
   };
+}
+
+/** 발송 전 주문 개인정보를 보여 준 기록 — 같은 날 같은 목록이면 다시 남기지 않음 (5분 새로고침마다 쌓이지 않게) */
+function logOpened_(user, sheetName, rows) {
+  if (!rows.length) return;
+  const key = 'SHOWN_' + user.id;
+  const today = Utilities.formatDate(new Date(), ss_().getSpreadsheetTimeZone(), 'yyyy-MM-dd');
+  const sig = today + '|' + sheetName + '|' + sha_(rows.join(',')).slice(0, 16);
+  if (props().getProperty(key) === sig) return;
+  props().setProperty(key, sig);
+  log_(user.name, '발송 전 주문 정보 보기', sheetName + ' ' + rows.length + '건 (' + rows.slice(0, 20).join(',') + (rows.length > 20 ? '…' : '') + '행)');
 }
 
 /** 웹앱: 가려진 칸 하나를 잠깐 보기 (기록이 남음) */
@@ -1076,7 +1100,7 @@ function updateCell(token, sheetName, row, colIdx, oldValue, newValue) {
     }
     const curDisp = col.enc ? decrypt_(cell.getDisplayValue()) : cell.getDisplayValue();
     const curShown = CONFIG.MASK_PII ? mask_(curDisp, col.pii) : curDisp;
-    if (curShown !== String(oldValue)) throw new Error('CONFLICT: 그사이 다른 분이 바꿨어요. 새로 불러올게요.');
+    if (curShown !== String(oldValue) && curDisp !== String(oldValue)) throw new Error('CONFLICT: 그사이 다른 분이 바꿨어요. 새로 불러올게요.');
     if (isDateCol_(col) && String(newValue).trim()) {
       const d = parseLooseDate_(String(newValue).trim());
       if (!d) throw new Error('날짜를 알아볼 수 없어요. 11/5 또는 2026-11-05 처럼 넣어 주세요.');
@@ -1090,7 +1114,10 @@ function updateCell(token, sheetName, row, colIdx, oldValue, newValue) {
     SpreadsheetApp.flush();
     log_(user.name, '수정', sheetName + ' ' + row + '행 [' + col.name + ']' + (col.pii ? '' : ' "' + String(curDisp).slice(0, 40) + '" → "' + String(newValue).slice(0, 40) + '"'));
     const d = col.enc ? decrypt_(cell.getDisplayValue()) : cell.getDisplayValue();
-    return CONFIG.MASK_PII ? mask_(d, col.pii) : d;
+    const inv = cols.find(c => c.ship === 'invoice'), dat = cols.find(c => c.ship === 'date');
+    const open = CONFIG.SHOW_PII_UNSHIPPED && user.role !== 'viewer' && !!(inv || dat) &&
+      !((inv && sh.getRange(row, inv.i + 1).getDisplayValue().trim()) || (dat && sh.getRange(row, dat.i + 1).getDisplayValue().trim()));
+    return CONFIG.MASK_PII && !open ? mask_(d, col.pii) : d;
   } finally {
     lock.releaseLock();
   }
